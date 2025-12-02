@@ -1,0 +1,41 @@
+runtime: python311
+
+service: default
+
+instance_class: F2
+
+automatic_scaling:
+  min_instances: 0
+  max_instances: 10
+  target_cpu_utilization: 0.65
+
+# Production environment variables
+env_variables:
+  FLASK_ENV: production
+  FLASK_DEBUG: "false"
+  # Non-sensitive configs can go here
+  GOOGLE_REDIRECT_URI: "https://estateally-ai-services.ue.r.appspot.com/auth/google/callback"
+  MAIL_SERVER: "smtp.gmail.com"
+  MAIL_PORT: "587"
+  MAIL_USE_TLS: "true"
+  MAIL_DEFAULT_SENDER: "noreply@myestateally.com"
+
+# Load secrets from Secret Manager
+# Format: SECRET_KEY: projects/PROJECT_ID/secrets/SECRET_NAME/versions/latest
+# Replace YOUR_PROJECT_ID with your actual Google Cloud project ID
+
+# Example (uncomment and update):
+# env_variables:
+#   SECRET_KEY: "projects/YOUR_PROJECT_ID/secrets/SECRET_KEY/versions/latest"
+#   OPENAI_API_KEY: "projects/YOUR_PROJECT_ID/secrets/OPENAI_API_KEY/versions/latest"
+#   GOOGLE_CLIENT_SECRET: "projects/YOUR_PROJECT_ID/secrets/GOOGLE_CLIENT_SECRET/versions/latest"
+
+handlers:
+- url: /static
+  static_dir: src/static
+  secure: always
+  expiration: 1d
+
+- url: /.*
+  script: auto
+  secure: always

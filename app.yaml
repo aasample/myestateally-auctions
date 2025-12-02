@@ -1,0 +1,35 @@
+runtime: python311
+
+service: default
+
+instance_class: F2
+
+automatic_scaling:
+  min_instances: 1
+  max_instances: 10
+  target_cpu_utilization: 0.6
+
+# ===== SECURE CONFIGURATION =====
+# Secrets are loaded from Google Cloud Secret Manager
+# NO secrets should be in this file!
+
+env_variables:
+  FLASK_ENV: production
+  FLASK_DEBUG: false
+
+# === OPTION 1: Use Secret Manager (Recommended) ===
+# Uncomment these lines after setting up Secret Manager:
+# env_variables:
+#   SECRET_KEY: ${SECRET_KEY}
+#   OPENAI_API_KEY: ${OPENAI_API_KEY}
+#   GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+#   GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+
+handlers:
+- url: /static
+  static_dir: src/static
+  secure: always
+
+- url: /.*
+  script: auto
+  secure: always
