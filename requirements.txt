@@ -1,0 +1,38 @@
+Flask==2.3.3
+Werkzeug==2.3.7
+Jinja2==3.1.2
+MarkupSafe==2.1.3
+itsdangerous==2.1.2
+click==8.1.7
+blinker==1.6.3
+Pillow==10.0.1
+qrcode[pil]==7.4.2
+requests==2.31.0
+urllib3==2.0.7
+certifi==2023.7.22
+charset-normalizer==3.3.0
+idna==3.4
+gunicorn==21.2.0
+
+# Email functionality
+Flask-Mail==0.10.0
+
+# PDF generation
+reportlab==4.0.4
+
+# Google Cloud services
+google-cloud-firestore==2.16.0
+google-cloud-storage==2.10.0
+google-auth==2.33.0
+Authlib==1.3.1
+
+# Authentication and security
+Flask-Session==0.5.0
+bcrypt==4.1.2
+python-dotenv==1.0.0
+
+# AI and machine learning
+openai==1.12.0
+
+# Multi-factor authentication
+pyotp==2.9.0
