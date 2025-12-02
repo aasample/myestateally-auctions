@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyEstateAlly - Family View</title>
+    <meta name="description" content="View and interact with shared estate inventory">
+    
+    <!-- PWA Configuration -->
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="MyEstateAlly Family">
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="family-view-body">
+    <!-- Header -->
+    <header class="family-header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-home"></i>
+                    <span>MyEstateAlly</span>
+                    <span class="family-badge">Family View</span>
+                </div>
+                <div class="family-member-info">
+                    <span>Member: <span id="member-code-display">--</span></span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="family-main">
+        <div class="container">
+            <!-- Welcome Card -->
+            <div class="family-welcome-card">
+                <h2><i class="fas fa-users"></i> Welcome to the Family Inventory</h2>
+                <p>Browse items, tag what you're interested in, and manage your wanted list.</p>
+                <div class="member-info">
+                    <span class="member-label">Your Member Code:</span>
+                    <span class="member-code" id="current-member-code">--</span>
+                </div>
+            </div>
+
+            <!-- Navigation -->
+            <div class="family-nav">
+                <button class="family-nav-btn active" data-view="all">
+                    <i class="fas fa-th-large"></i>
+                    All Items
+                </button>
+                <button class="family-nav-btn" data-view="for-sale">
+                    <i class="fas fa-tag"></i>
+                    For Sale
+                </button>
+                <button class="family-nav-btn" data-view="my-wanted">
+                    <i class="fas fa-heart"></i>
+                    My Wanted Items
+                </button>
+            </div>
+
+            <!-- Filters -->
+            <div class="family-filters">
+                <div class="filter-group">
+                    <label for="category-filter">Category:</label>
+                    <select id="category-filter">
+                        <option value="">All Categories</option>
+                        <option value="furniture">Furniture</option>
+                        <option value="jewelry">Jewelry</option>
+                        <option value="electronics">Electronics</option>
+                        <option value="art">Art & Collectibles</option>
+                        <option value="books">Books</option>
+                        <option value="clothing">Clothing</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="sort-filter">Sort by:</label>
+                    <select id="sort-filter">
+                        <option value="name">Name</option>
+                        <option value="value-high">Highest Value</option>
+                        <option value="value-low">Lowest Value</option>
+                        <option value="date-new">Newest First</option>
+                        <option value="date-old">Oldest First</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Items Grid -->
+            <div class="family-items-grid" id="family-items-grid">
+                <!-- Items will be populated by JavaScript -->
+            </div>
+
+            <!-- My Wanted Items Section -->
+            <div class="my-wanted-section" id="my-wanted-list" style="display: none;">
+                <div class="wanted-header">
+                    <h3><i class="fas fa-heart"></i> My Wanted Items</h3>
+                    <p>Items you've tagged as wanted, organized by priority</p>
+                </div>
+                
+                <div class="wanted-items-grid" id="wanted-items-grid">
+                    <!-- Wanted items will be populated by JavaScript -->
+                </div>
+                
+                <div class="empty-state" id="wanted-empty-state" style="display: none;">
+                    <i class="fas fa-heart-broken"></i>
+                    <h3>No wanted items yet</h3>
+                    <p>Browse the inventory and click "Want This" on items you're interested in.</p>
+                </div>
+            </div>
+
+            <!-- Loading State -->
+            <div class="family-loading" id="family-loading" style="display: none;">
+                <i class="fas fa-spinner fa-spin"></i>
+                <h3>Loading inventory...</h3>
+                <p>Please wait while we fetch the latest items.</p>
+            </div>
+
+            <!-- Empty State -->
+            <div class="family-empty-state" id="family-empty-state" style="display: none;">
+                <i class="fas fa-box-open"></i>
+                <h3>No items available</h3>
+                <p>The inventory is empty or no items match your current filters.</p>
+            </div>
+
+            <!-- Error State -->
+            <div class="family-error-state" id="family-error-state" style="display: none;">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h3>Unable to load inventory</h3>
+                <p>Please check your connection and try again.</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modals -->
+    
+    <!-- Member Setup Modal -->
+    <div id="member-setup-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-user-check"></i> Enter Your Member Code</h3>
+            </div>
+            <div class="modal-body">
+                <p>Please enter the member code provided by the estate owner to access the inventory.</p>
+                <div class="form-group">
+                    <label for="member-code-input">Member Code</label>
+                    <input type="text" id="member-code-input" placeholder="FM001" maxlength="5" style="text-transform: uppercase;">
+                    <small>Format: FM001, FM002, etc.</small>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn primary" onclick="setMemberCode()">
+                        <i class="fas fa-check"></i>
+                        Continue
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Item Details Modal -->
+    <div id="family-item-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="family-item-name">Item Details</h3>
+                <button class="modal-close" onclick="familyApp.closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="family-item-content">
+                    <!-- Item details will be populated by JavaScript -->
+                </div>
+                <div class="modal-actions">
+                    <button id="want-item-btn" class="btn primary">
+                        <i class="fas fa-heart"></i>
+                        Want This Item
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Message Display -->
+    <div id="family-message" class="family-message" style="display: none;">
+        <!-- Messages will be populated by JavaScript -->
+    </div>
+
+    <!-- Scripts -->
+    <script src="/static/family-view.js"></script>
+</body>
+</html>
+

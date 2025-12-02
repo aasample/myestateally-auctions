@@ -1,0 +1,31 @@
+runtime: python311
+
+service: default
+
+instance_class: F2
+
+automatic_scaling:
+  min_instances: 1
+  max_instances: 10
+  target_cpu_utilization: 0.6
+
+env_variables:
+  FLASK_ENV: production
+  FLASK_DEBUG: false
+  SECRET_KEY: myestateally-super-secure-secret-key-2024-production
+  OPENAI_API_KEY: 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
+  GOOGLE_CLIENT_ID: 534529839786-jn1008urf304qnugpg5goohgpqkgk76k.apps.googleusercontent.com
+  GOOGLE_CLIENT_SECRET: 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
+  GOOGLE_REDIRECT_URI: https://estateally-ai-services.ue.r.appspot.com/auth/google/callback
+
+handlers:
+- url: /static
+  static_dir: src/static
+  secure: always
+
+- url: /.*
+  script: auto
+  secure: always
+
+
+

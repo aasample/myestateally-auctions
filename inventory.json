@@ -1,0 +1,16 @@
+{
+  "807e25dc-4dbb-4c7c-8981-a11f017aeee3": {
+    "id": "807e25dc-4dbb-4c7c-8981-a11f017aeee3",
+    "name": "Mobile Uploaded Item",
+    "category": "General",
+    "description": "Item uploaded from mobile device via QR code.",
+    "estimatedValue": 30.0,
+    "forSale": false,
+    "assignedTo": "",
+    "photo": "/uploads/test_image.jpg",
+    "dateAdded": "2025-09-22T08:32:40.292726",
+    "lastModified": "2025-09-22T08:32:40.293227",
+    "uploadSource": "mobile",
+    "sessionId": "5aaa144e-5b99-4de6-9846-78d53483c9ae"
+  }
+}

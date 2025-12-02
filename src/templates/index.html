@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyEstateAlly - AI-Powered Estate Management</title>
+    <meta name="description" content="Simplify your estate management with AI-powered inventory tracking, family sharing, and smart pricing analysis.">
+    
+    <!-- PWA Configuration -->
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="MyEstateAlly">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="apple-touch-icon" href="/static/icon-192x192.png">
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo" id="home-button" style="cursor: pointer;" title="Return to Dashboard">
+                    <i class="fas fa-home"></i>
+                    <span>MyEstateAlly</span>
+                    <span class="ai-badge">AI-Powered</span>
+                </div>
+                <div class="header-actions">
+                    <!-- Estate Selector (when authenticated) -->
+                    <div id="estate-selector" class="estate-selector" style="display: none;">
+                        <select id="estate-select" class="estate-select" onchange="app.switchEstate(this.value)">
+                            <option value="">Select Estate...</option>
+                        </select>
+                        <button class="btn small" onclick="app.showCreateEstateModal()" title="Create New Estate">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    
+                    <!-- User Menu (when authenticated) -->
+                    <div id="user-menu" class="user-menu" style="display: none;">
+                        <div class="user-info">
+                            <span id="user-name">User Name</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </div>
+                        <div class="user-dropdown">
+                            <a href="#" onclick="showUserProfile()">
+                                <i class="fas fa-user"></i> Profile
+                            </a>
+                            <a href="#" onclick="showAccountSettings()">
+                                <i class="fas fa-cog"></i> Settings
+                            </a>
+                            <hr>
+                            <a href="#" onclick="logout()">
+                                <i class="fas fa-sign-out-alt"></i> Logout
+                            </a>
+                        </div>
+                    </div>
+                    
+                    <!-- Auth Buttons (when not authenticated) -->
+                    <div id="auth-buttons" class="auth-buttons">
+                        <button class="btn secondary" onclick="openModal('auth-modal')">
+                            <i class="fas fa-sign-in-alt"></i> Sign In
+                        </button>
+                        <button class="btn primary" onclick="openModal('auth-modal')">
+                            <i class="fas fa-user-plus"></i> Sign Up
+                        </button>
+                    </div>
+                    
+                    <button id="install-btn" class="btn secondary" style="display: none;">
+                        <i class="fas fa-download"></i>
+                        Install MyEstateAlly App
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation -->
+    <nav class="nav">
+        <div class="container">
+            <div class="nav-content">
+                <button class="nav-btn active" data-section="dashboard">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>Dashboard</span>
+                </button>
+                <button class="nav-btn" data-section="inventory">
+                    <i class="fas fa-boxes"></i>
+                    <span>Inventory</span>
+                </button>
+                <button class="nav-btn" data-section="ai-pricing">
+                    <i class="fas fa-search-dollar"></i>
+                    <span>AI Pricing</span>
+                </button>
+                <button class="nav-btn" data-section="family">
+                    <i class="fas fa-users"></i>
+                    <span>Family</span>
+                </button>
+                <button class="nav-btn" data-section="estate">
+                    <i class="fas fa-clipboard-list"></i>
+                    <span>Estate Settlement</span>
+                </button>
+                <button class="nav-btn" data-section="documents">
+                    <i class="fas fa-file-alt"></i>
+                    <span>Documents</span>
+                </button>
+                <button class="nav-btn" data-section="legacy">
+                    <i class="fas fa-heart"></i>
+                    <span>Legacy</span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main">
+        <div class="container">
+            <!-- Dashboard Section -->
+            <section id="dashboard" class="section active">
+                <!-- Welcome Card -->
+                <div class="welcome-card">
+                    <h1>Welcome to MyEstateAlly!</h1>
+                    <p>Your AI-powered partner in estate management. Simplify your estate, secure your legacy.</p>
+                </div>
+
+                <!-- Hero Upload Section -->
+                <div class="hero-upload">
+                    <div class="hero-content">
+                        <div class="hero-icon">
+                            <i class="fas fa-camera"></i>
+                        </div>
+                        <h2>Add Item with AI Analysis</h2>
+                        <p>Take a photo and let AI identify your item, estimate its value, and create a description</p>
+                        
+                        <div class="upload-area" id="hero-upload-area">
+                            <div class="upload-placeholder">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <p>Drop photo here or click to browse</p>
+                                <small>Supports JPG, PNG, HEIC</small>
+                            </div>
+                            <input type="file" id="hero-photo-upload" accept="image/*,.heic,.heif" capture="environment" style="display: none;">
+                        </div>
+                        
+                        <div class="hero-actions">
+                            <button class="btn primary" id="take-photo-btn">
+                                <i class="fas fa-camera"></i>
+                                Take Photo
+                            </button>
+                            <button class="btn secondary" id="qr-upload-btn">
+                                <i class="fas fa-qrcode"></i>
+                                Use Phone Camera
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Instructions -->
+                <div class="instruction-card">
+                    <h3><i class="fas fa-info-circle"></i> How to Use Dashboard</h3>
+                    <ul class="instruction-list">
+                        <li><strong>Photo Upload:</strong> Use the large square above to quickly add items with AI analysis</li>
+                        <li><strong>View Overview:</strong> See your total items, estimated value, and items for sale below</li>
+                        <li><strong>Quick Actions:</strong> Use the buttons below to quickly add items or browse inventory</li>
+                        <li><strong>Navigation:</strong> Use the tabs above to access different features</li>
+                    </ul>
+                </div>
+
+                <!-- Stats -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-boxes"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="total-items">0</h3>
+                            <p>Total Items</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-dollar-sign"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="total-value">$0</h3>
+                            <p>Estimated Value</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-tag"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="for-sale-items">0</h3>
+                            <p>For Sale</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-heart"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="assigned-items">0</h3>
+                            <p>Assigned</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="quick-actions">
+                    <h3>Quick Actions</h3>
+                    <div class="actions-grid">
+                        <button class="action-btn" id="add-item-btn">
+                            <i class="fas fa-plus"></i>
+                            Add New Item
+                        </button>
+                        <button class="action-btn" id="ai-pricing-btn">
+                            <i class="fas fa-robot"></i>
+                            AI Price Lookup
+                        </button>
+                        <button class="action-btn" id="browse-inventory-btn">
+                            <i class="fas fa-search"></i>
+                            Browse Inventory
+                        </button>
+                        <button class="action-btn" id="export-data-btn">
+                            <i class="fas fa-download"></i>
+                            Export Data
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Recent Activity -->
+                <div class="recent-activity">
+                    <h3>Recent Activity</h3>
+                    <div class="activity-list" id="activity-list">
+                        <div class="activity-item">
+                            <i class="fas fa-info-circle"></i>
+                            <span>Welcome to MyEstateAlly! Start by adding your first item.</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Inventory Section -->
+            <section id="inventory" class="section">
+                <div class="section-header">
+                    <h2><i class="fas fa-boxes"></i> Inventory Management</h2>
+                    <div class="header-buttons">
+                        <button class="btn secondary" id="refresh-inventory">
+                            <i class="fas fa-sync"></i>
+                            Refresh
+                        </button>
+                        <button class="btn primary" id="add-inventory-item">
+                            <i class="fas fa-plus"></i>
+                            Add Item
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="inventory-filters">
+                    <select id="category-filter">
+                        <option value="">All Categories</option>
+                        <option value="furniture">Furniture</option>
+                        <option value="jewelry">Jewelry</option>
+                        <option value="electronics">Electronics</option>
+                        <option value="art">Art & Collectibles</option>
+                        <option value="books">Books</option>
+                        <option value="clothing">Clothing</option>
+                        <option value="other">Other</option>
+                    </select>
+                    
+                    <select id="sort-filter">
+                        <option value="name">Sort by Name</option>
+                        <option value="value-high">Highest Value</option>
+                        <option value="value-low">Lowest Value</option>
+                        <option value="date-new">Newest First</option>
+                        <option value="date-old">Oldest First</option>
+                    </select>
+                </div>
+                
+                <div class="inventory-grid" id="inventory-grid">
+                    <!-- Items will be populated by JavaScript -->
+                </div>
+                
+                <div class="empty-state" id="inventory-empty" style="display: none;">
+                    <i class="fas fa-box-open"></i>
+                    <h3>No items in inventory</h3>
+                    <p>Start by adding your first item using the photo upload above.</p>
+                </div>
+            </section>
+
+            <!-- AI Pricing Section -->
+            <section id="ai-pricing" class="section">
+                <div class="section-header">
+                    <h2><i class="fas fa-search-dollar"></i> AI Price Analysis</h2>
+                    <p>Get real-time pricing data from multiple platforms</p>
+                </div>
+                
+                <!-- Pricing Lookup Form -->
+                <div class="pricing-lookup">
+                    <div class="lookup-form">
+                        <div class="form-group">
+                            <label for="pricing-item-select">Select from Inventory:</label>
+                            <select id="pricing-item-select">
+                                <option value="">Choose an item from your inventory...</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-divider">
+                            <span>OR</span>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="pricing-item-name">Item Name:</label>
+                            <input type="text" id="pricing-item-name" placeholder="Enter item name manually...">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="pricing-item-category">Category:</label>
+                            <select id="pricing-item-category">
+                                <option value="">Select category...</option>
+                                <option value="Electronics">Electronics</option>
+                                <option value="Furniture">Furniture</option>
+                                <option value="Clothing">Clothing</option>
+                                <option value="Books">Books</option>
+                                <option value="Jewelry">Jewelry</option>
+                                <option value="General">General</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="pricing-item-description">Description (optional):</label>
+                            <textarea id="pricing-item-description" rows="3" placeholder="Add more details to improve pricing accuracy..."></textarea>
+                        </div>
+                        
+                        <button class="btn primary" id="lookup-pricing-btn">
+                            <i class="fas fa-search"></i>
+                            Lookup Pricing
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Pricing Results -->
+                <div id="pricing-results" class="pricing-results" style="display: none;">
+                    <div class="results-header">
+                        <h3 id="pricing-item-title">Pricing Analysis</h3>
+                        <div class="results-summary">
+                            <div class="summary-stat">
+                                <span class="stat-label">Average Price</span>
+                                <span class="stat-value" id="average-price">$0.00</span>
+                            </div>
+                            <div class="summary-stat">
+                                <span class="stat-label">Price Range</span>
+                                <span class="stat-value" id="price-range">$0.00 - $0.00</span>
+                            </div>
+                            <div class="summary-stat">
+                                <span class="stat-label">Market Trend</span>
+                                <span class="stat-value trend" id="market-trend">Stable</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Platform Results -->
+                    <div class="platform-results">
+                        <h4><i class="fas fa-store"></i> Platform Analysis</h4>
+                        <p class="platform-note"><i class="fas fa-info-circle"></i> Click on any listing to open it in a new tab and verify it matches your item</p>
+                        <div id="platform-grid" class="platform-grid">
+                            <!-- Platform cards will be populated by JavaScript -->
+                        </div>
+                    </div>
+                    
+                    <!-- AI Analysis -->
+                    <div class="ai-analysis">
+                        <h4><i class="fas fa-robot"></i> AI Market Analysis</h4>
+                        <div class="analysis-grid">
+                            <div class="analysis-card">
+                                <h5>Market Insights</h5>
+                                <ul id="market-insights">
+                                    <!-- Insights will be populated by JavaScript -->
+                                </ul>
+                            </div>
+                            <div class="analysis-card">
+                                <h5>Selling Recommendations</h5>
+                                <ul id="selling-recommendations">
+                                    <!-- Recommendations will be populated by JavaScript -->
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <div class="recommendation-box">
+                            <div class="recommended-price">
+                                <span class="recommendation-label">AI Recommended Price:</span>
+                                <span class="recommended-value" id="recommended-price">$0.00</span>
+                                <span class="confidence-score" id="confidence-score">82% confidence</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Pricing History -->
+                    <div class="pricing-history">
+                        <h4><i class="fas fa-chart-line"></i> Price History</h4>
+                        <div id="price-chart" class="price-chart">
+                            <!-- Chart will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Loading State -->
+                <div id="pricing-loading" class="pricing-loading" style="display: none;">
+                    <div class="loading-content">
+                        <div class="loading-spinner"></div>
+                        <h3>Analyzing Market Data...</h3>
+                        <p>Searching across multiple platforms for pricing information</p>
+                        <div class="loading-steps">
+                            <div class="step active">🔍 Searching eBay...</div>
+                            <div class="step">📦 Checking Amazon...</div>
+                            <div class="step">📱 Scanning Facebook Marketplace...</div>
+                            <div class="step">🛍️ Reviewing Etsy...</div>
+                            <div class="step">🤖 AI Analysis...</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Family Sharing Section -->
+            <section id="family" class="section">
+                <div class="section-header">
+                    <h2><i class="fas fa-users"></i> Family Sharing</h2>
+                </div>
+
+                <!-- Family Overview -->
+                <div class="family-overview">
+                    <div class="family-stats">
+                        <div class="family-stat">
+                            <h3 id="family-members-count">0</h3>
+                            <p>Family Members</p>
+                        </div>
+                        <div class="family-stat">
+                            <h3 id="wanted-items-count">0</h3>
+                            <p>Wanted Items</p>
+                        </div>
+                        <div class="family-stat">
+                            <h3 id="shared-items-count">0</h3>
+                            <p>Shared Items</p>
+                        </div>
+                        <div class="family-stat">
+                            <h3 id="conflict-items-count">0</h3>
+                            <p>Conflict Items</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Decision Making Section -->
+                    <div class="decision-making-section" id="decision-making-section" style="display: none;">
+                        <h3><i class="fas fa-gavel"></i> Decision Making</h3>
+                        <p>Review family member desires and make assignment decisions</p>
+                        <div class="decision-actions">
+                            <button class="btn primary" onclick="app.showDesireAnalysis()">
+                                <i class="fas fa-chart-bar"></i> View Desire Analysis
+                            </button>
+                            <button class="btn secondary" onclick="app.generateAssignmentReport()">
+                                <i class="fas fa-file-pdf"></i> Download Assignment Report
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sharing Settings -->
+                <div class="sharing-settings-card">
+                    <h3><i class="fas fa-cog"></i> Sharing Settings</h3>
+                    <div class="settings-grid">
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Enable Family Sharing</h4>
+                                <p>Allow family members to view your inventory</p>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="sharing-enabled" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Show For Sale Items Only</h4>
+                                <p>Family can only see items marked for sale</p>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="for-sale-only">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <h4>Allow Wanted Tagging</h4>
+                                <p>Family members can tag items they want</p>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="wanted-tagging" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sharing Link -->
+                <div class="sharing-link-card">
+                    <h3><i class="fas fa-link"></i> Family Sharing Link</h3>
+                    <p>Share this link with family members to give them access to your inventory.</p>
+                    <div class="sharing-link-container">
+                        <input type="text" id="sharing-link" readonly placeholder="Generate sharing link...">
+                        <button class="btn secondary" id="copy-link-btn">
+                            <i class="fas fa-copy"></i>
+                            Copy
+                        </button>
+                        <button class="btn primary" id="generate-link-btn">
+                            <i class="fas fa-refresh"></i>
+                            Generate
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Family Members -->
+                <div class="family-members-section">
+                    <div class="section-header-inline">
+                        <h3><i class="fas fa-users"></i> Family Members</h3>
+                        <button class="btn primary" id="invite-member-btn">
+                            <i class="fas fa-user-plus"></i>
+                            Invite Member
+                        </button>
+                    </div>
+                    
+                    <div class="family-members-list" id="family-members-list">
+                        <!-- Family members will be populated by JavaScript -->
+                    </div>
+                    
+                    <div class="empty-state" id="family-empty" style="display: none;">
+                        <i class="fas fa-user-friends"></i>
+                        <h3>No family members invited</h3>
+                        <p>Start by inviting family members to share your inventory.</p>
+                    </div>
+                </div>
+
+                <!-- Family Info -->
+                <div class="family-info-card">
+                    <h4><i class="fas fa-info-circle"></i> How Family Sharing Works</h4>
+                    <ul>
+                        <li><strong>Invite up to 25 family members</strong> with unique codes (FM001-FM025)</li>
+                        <li><strong>Share your inventory</strong> with customizable privacy settings</li>
+                        <li><strong>Family members can tag items</strong> they're interested in</li>
+                        <li><strong>Desire levels (1-5)</strong> help prioritize who gets what</li>
+                        <li><strong>Decision-making tools</strong> for property owners</li>
+                        <li><strong>Anonymous codes</strong> maintain privacy while enabling organization</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Estate Settlement Section -->
+            <section id="estate" class="section">
+                <div class="section-header">
+                    <h2><i class="fas fa-clipboard-list"></i> Estate Settlement</h2>
+                    <p>Manage estate settlement tasks and track item disposal</p>
+                </div>
+
+                <!-- Estate Timeline -->
+                <div class="estate-timeline-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-tasks"></i> Settlement Timeline</h3>
+                        <button class="btn primary" onclick="app.showAddTaskModal()">
+                            <i class="fas fa-plus"></i> Add Task
+                        </button>
+                    </div>
+                    <div class="timeline-container" id="timeline-container">
+                        <!-- Timeline tasks will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Item Disposal Tracking -->
+                <div class="disposal-tracking-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-trash-alt"></i> Item Disposal Tracking</h3>
+                        <button class="btn secondary" onclick="app.showDisposalSummary()">
+                            <i class="fas fa-chart-bar"></i> View Summary
+                        </button>
+                    </div>
+                    <div class="disposal-stats">
+                        <div class="stat-item">
+                            <h4 id="total-disposed">0</h4>
+                            <p>Items Disposed</p>
+                        </div>
+                        <div class="stat-item">
+                            <h4 id="tax-deductible">$0</h4>
+                            <p>Tax Deductible</p>
+                        </div>
+                        <div class="stat-item">
+                            <h4 id="total-value-disposed">$0</h4>
+                            <p>Total Value</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="quick-actions-card">
+                    <h3><i class="fas fa-bolt"></i> Quick Actions</h3>
+                    <div class="action-buttons">
+                        <button class="btn primary" onclick="app.showBulkDisposalModal()">
+                            <i class="fas fa-list"></i> Bulk Disposal
+                        </button>
+                        <button class="btn secondary" onclick="app.generateDisposalReport()">
+                            <i class="fas fa-file-pdf"></i> Disposal Report
+                        </button>
+                        <button class="btn secondary" onclick="app.showDonationTracker()">
+                            <i class="fas fa-heart"></i> Donation Tracker
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Documents Section -->
+            <section id="documents" class="section">
+                <div class="section-header">
+                    <h2><i class="fas fa-file-alt"></i> Documents & Records</h2>
+                </div>
+                
+                <div class="documents-info">
+                    <div class="info-card">
+                        <h3><i class="fas fa-receipt"></i> Document Management</h3>
+                        <p>Store and organize important documents related to your estate items:</p>
+                        <ul>
+                            <li>Purchase receipts and invoices</li>
+                            <li>Warranty information and manuals</li>
+                            <li>Appraisal certificates</li>
+                            <li>Insurance documentation</li>
+                            <li>Ownership certificates and titles</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Legacy Section -->
+            <section id="legacy" class="section">
+                <div class="section-header">
+                    <h2><i class="fas fa-heart"></i> Legacy Planning</h2>
+                </div>
+                
+                <div class="legacy-info">
+                    <div class="info-card">
+                        <h3><i class="fas fa-gift"></i> Estate Assignment</h3>
+                        <p>Plan the future of your belongings:</p>
+                        <ul>
+                            <li>Assign items to specific family members</li>
+                            <li>Set inheritance preferences</li>
+                            <li>Document sentimental value and stories</li>
+                            <li>Create a comprehensive estate plan</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Modals -->
+    
+    <!-- QR Code Modal -->
+    <div id="qr-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-qrcode"></i> Upload from Your Phone</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="qr-container">
+                    <div class="qr-code" id="qr-code">
+                        <div class="qr-loading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Generating QR Code...</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="qr-instructions">
+                    <h4 style="color: #7c3aed !important;">📱 How to Upload from Your Phone:</h4>
+                    <ol>
+                        <li style="color: #6366f1 !important;">Open your phone's camera app</li>
+                        <li style="color: #6366f1 !important;">Point camera at the QR code above</li>
+                        <li style="color: #6366f1 !important;">Tap the notification to open the upload page</li>
+                        <li style="color: #6366f1 !important;">Take or select a photo to upload</li>
+                    </ol>
+                    <div class="mobile-qr-instructions">
+                        <p><strong>Tips for iOS users:</strong></p>
+                        <ul>
+                            <li style="color: #a78bfa !important;">Make sure your camera app has QR code scanning enabled</li>
+                            <li style="color: #a78bfa !important;">Try taking a new photo with your camera if upload fails</li>
+                            <li style="color: #a78bfa !important;">HEIC photos are automatically converted</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Desire Analysis Modal -->
+    <div id="desire-analysis-modal" class="modal">
+        <div class="modal-content large-modal">
+            <div class="modal-header">
+                <h3><i class="fas fa-chart-bar"></i> Family Desire Analysis</h3>
+                <button class="modal-close" onclick="closeModal('desire-analysis-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="analysis-summary" id="analysis-summary">
+                    <div class="summary-stats">
+                        <div class="stat-card">
+                            <h4 id="total-items-with-desires">0</h4>
+                            <p>Items with Desires</p>
+                        </div>
+                        <div class="stat-card">
+                            <h4 id="high-conflict-items">0</h4>
+                            <p>High Conflict Items</p>
+                        </div>
+                        <div class="stat-card">
+                            <h4 id="total-family-members">0</h4>
+                            <p>Family Members</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="analysis-items" id="analysis-items">
+                    <!-- Analysis items will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Item Assignment Modal -->
+    <div id="assignment-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-user-check"></i> Assign Item</h3>
+                <button class="modal-close" onclick="closeModal('assignment-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="item-assignment-preview" id="assignment-item-preview">
+                    <!-- Item preview will be populated here -->
+                </div>
+                
+                <div class="desire-summary" id="assignment-desire-summary">
+                    <!-- Desire summary will be populated here -->
+                </div>
+                
+                <form id="assignment-form">
+                    <div class="form-group">
+                        <label for="assign-to-member">Assign to:</label>
+                        <select id="assign-to-member" required>
+                            <option value="">Select family member...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="assignment-reason">Reason for assignment:</label>
+                        <textarea id="assignment-reason" placeholder="Explain your decision..." rows="3"></textarea>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn secondary" onclick="closeModal('assignment-modal')">Cancel</button>
+                        <button type="submit" class="btn primary">Assign Item</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Task Modal -->
+    <div id="add-task-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-plus"></i> Add Settlement Task</h3>
+                <button class="modal-close" onclick="closeModal('add-task-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="add-task-form">
+                    <div class="form-group">
+                        <label for="task-description">Task Description</label>
+                        <input type="text" id="task-description" required placeholder="e.g., Sort through bedroom furniture">
+                    </div>
+                    <div class="form-group">
+                        <label for="task-due-date">Due Date</label>
+                        <input type="date" id="task-due-date">
+                    </div>
+                    <div class="form-group">
+                        <label for="task-priority">Priority</label>
+                        <select id="task-priority">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                        </select>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn secondary" onclick="closeModal('add-task-modal')">Cancel</button>
+                        <button type="submit" class="btn primary">Add Task</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Disposal Modal -->
+    <div id="disposal-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-trash-alt"></i> Dispose Item</h3>
+                <button class="modal-close" onclick="closeModal('disposal-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="disposal-form">
+                    <div class="form-group">
+                        <label for="disposal-type">Disposal Type</label>
+                        <select id="disposal-type" required>
+                            <option value="">Select disposal method...</option>
+                            <option value="sold">Sold</option>
+                            <option value="donated">Donated</option>
+                            <option value="discarded">Discarded</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="disposal-value">Value Received</label>
+                        <input type="number" id="disposal-value" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label for="disposal-notes">Notes</label>
+                        <textarea id="disposal-notes" rows="3" placeholder="Additional details about disposal..."></textarea>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn secondary" onclick="closeModal('disposal-modal')">Cancel</button>
+                        <button type="submit" class="btn primary">Mark as Disposed</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progressive Authentication Modal -->
+    <div id="auth-modal" class="modal">
+        <div class="modal-content auth-modal-content">
+            <div class="modal-header">
+                <h3 id="auth-modal-title"><i class="fas fa-sign-in-alt"></i> Welcome to MyEstateAlly</h3>
+                <button class="modal-close" onclick="closeModal('auth-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Step 1: Email Entry -->
+                <div id="auth-step-email" class="auth-step active">
+                    <div class="auth-step-content">
+                        <div class="auth-icon">
+                            <i class="fas fa-envelope fa-3x"></i>
+                        </div>
+                        <h4>Sign in or create account</h4>
+                        <p class="auth-subtitle">Enter your email to get started</p>
+                        
+                        <form id="email-check-form">
+                            <div class="form-group">
+                                <label for="auth-email">Email Address</label>
+                                <input type="email" id="auth-email" required placeholder="you@example.com" autofocus>
+                            </div>
+                            <button type="submit" class="btn primary full-width">
+                                <i class="fas fa-arrow-right"></i> Continue
+                            </button>
+                        </form>
+                        
+                        <div class="auth-divider">
+                            <span>or continue with</span>
+                        </div>
+                        
+                        <div class="oauth-buttons">
+                            <button class="btn google-btn" onclick="loginWithGoogle()">
+                                <i class="fab fa-google"></i> Google
+                            </button>
+                            <button class="btn facebook-btn" onclick="loginWithFacebook()">
+                                <i class="fab fa-facebook-f"></i> Facebook
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Step 2A: Password Entry (Existing User) -->
+                <div id="auth-step-password" class="auth-step">
+                    <div class="auth-step-content">
+                        <button class="back-btn" onclick="authGoBack()">
+                            <i class="fas fa-arrow-left"></i> Back
+                        </button>
+                        <div class="auth-icon">
+                            <i class="fas fa-lock fa-3x"></i>
+                        </div>
+                        <h4>Welcome back!</h4>
+                        <p class="auth-subtitle">
+                            <span id="auth-user-email"></span>
+                        </p>
+                        
+                        <form id="password-form">
+                            <div class="form-group">
+                                <label for="auth-password">Password</label>
+                                <input type="password" id="auth-password" required placeholder="Enter your password" autofocus>
+                            </div>
+                            <div class="form-group checkbox-group">
+                                <input type="checkbox" id="remember-me">
+                                <label for="remember-me">Remember me</label>
+                            </div>
+                            <button type="submit" class="btn primary full-width">
+                                <i class="fas fa-sign-in-alt"></i> Sign In
+                            </button>
+                        </form>
+                        
+                        <div class="auth-footer">
+                            <button class="btn-link" onclick="showForgotPassword()">
+                                Forgot password?
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Step 2B: Sign Up (New User) -->
+                <div id="auth-step-signup" class="auth-step">
+                    <div class="auth-step-content">
+                        <button class="back-btn" onclick="authGoBack()">
+                            <i class="fas fa-arrow-left"></i> Back
+                        </button>
+                        <div class="auth-icon">
+                            <i class="fas fa-user-plus fa-3x"></i>
+                        </div>
+                        <h4>Create your account</h4>
+                        <p class="auth-subtitle">
+                            <span id="auth-signup-email"></span>
+                        </p>
+                        
+                        <form id="signup-password-form">
+                            <div class="form-group">
+                                <label for="signup-name">Full Name</label>
+                                <input type="text" id="signup-name" required placeholder="Your name" autofocus>
+                            </div>
+                            <div class="form-group">
+                                <label for="signup-password">Password</label>
+                                <input type="password" id="signup-password" required placeholder="Create a password (min 8 characters)" minlength="8">
+                                <small class="password-hint">Use at least 8 characters with a mix of letters and numbers</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="signup-password-confirm">Confirm Password</label>
+                                <input type="password" id="signup-password-confirm" required placeholder="Confirm your password">
+                            </div>
+                            <div class="form-group checkbox-group">
+                                <input type="checkbox" id="enable-mfa" checked>
+                                <label for="enable-mfa">Enable two-factor authentication (recommended)</label>
+                            </div>
+                            <button type="submit" class="btn primary full-width">
+                                <i class="fas fa-user-plus"></i> Create Account
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                
+                <!-- Step 3: MFA Verification -->
+                <div id="auth-step-mfa" class="auth-step">
+                    <div class="auth-step-content">
+                        <div class="auth-icon">
+                            <i class="fas fa-mobile-alt fa-3x"></i>
+                        </div>
+                        <h4>Two-Factor Authentication</h4>
+                        <p class="auth-subtitle">Enter the 6-digit code from your authenticator app</p>
+                        
+                        <form id="mfa-form">
+                            <div class="form-group">
+                                <div class="mfa-code-input">
+                                    <input type="text" maxlength="1" class="mfa-digit" data-index="0">
+                                    <input type="text" maxlength="1" class="mfa-digit" data-index="1">
+                                    <input type="text" maxlength="1" class="mfa-digit" data-index="2">
+                                    <input type="text" maxlength="1" class="mfa-digit" data-index="3">
+                                    <input type="text" maxlength="1" class="mfa-digit" data-index="4">
+                                    <input type="text" maxlength="1" class="mfa-digit" data-index="5">
+                                </div>
+                            </div>
+                            <div class="form-group checkbox-group">
+                                <input type="checkbox" id="trust-device">
+                                <label for="trust-device">Trust this device for 30 days</label>
+                            </div>
+                            <button type="submit" class="btn primary full-width">
+                                <i class="fas fa-check"></i> Verify Code
+                            </button>
+                        </form>
+                        
+                        <div class="auth-footer">
+                            <button class="btn-link" onclick="resendMfaCode()">
+                                Didn't receive a code? Resend
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Step 4: MFA Setup (For New Users) -->
+                <div id="auth-step-mfa-setup" class="auth-step">
+                    <div class="auth-step-content">
+                        <div class="auth-icon">
+                            <i class="fas fa-qrcode fa-3x"></i>
+                        </div>
+                        <h4>Set Up Two-Factor Authentication</h4>
+                        <p class="auth-subtitle">Scan this QR code with your authenticator app</p>
+                        
+                        <div class="mfa-setup-container">
+                            <div id="mfa-qr-code" class="mfa-qr-code">
+                                <!-- QR code will be inserted here -->
+                            </div>
+                            <div class="mfa-manual-code">
+                                <p><strong>Can't scan?</strong> Enter this code manually:</p>
+                                <code id="mfa-secret-code">XXXX XXXX XXXX XXXX</code>
+                            </div>
+                        </div>
+                        
+                        <form id="mfa-setup-verify-form">
+                            <div class="form-group">
+                                <label>Enter the 6-digit code from your app to verify</label>
+                                <div class="mfa-code-input">
+                                    <input type="text" maxlength="1" class="mfa-digit" data-index="0">
+                                    <input type="text" maxlength="1" class="mfa-digit" data-index="1">
+                                    <input type="text" maxlength="1" class="mfa-digit" data-index="2">
+                                    <input type="text" maxlength="1" class="mfa-digit" data-index="3">
+                                    <input type="text" maxlength="1" class="mfa-digit" data-index="4">
+                                    <input type="text" maxlength="1" class="mfa-digit" data-index="5">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn primary full-width">
+                                <i class="fas fa-check"></i> Complete Setup
+                            </button>
+                        </form>
+                        
+                        <div class="auth-footer">
+                            <button class="btn-link" onclick="skipMfaSetup()">
+                                Skip for now (not recommended)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Estate Modal -->
+    <div id="create-estate-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New Estate</h2>
+                <button class="close-btn" onclick="closeModal('create-estate-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="create-estate-form" onsubmit="app.createEstate(event)">
+                    <div class="form-group">
+                        <label for="estate-name">Estate Name</label>
+                        <input type="text" id="estate-name" name="estate-name" required 
+                               placeholder="e.g., Smith Family Estate, Mom's House">
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn secondary" onclick="closeModal('create-estate-modal')">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn primary">
+                            <i class="fas fa-plus"></i> Create Estate
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Invite Family Member Modal -->
+    <div id="invite-family-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-user-plus"></i> Invite Family Member</h3>
+                <button class="modal-close" onclick="closeModal('invite-family-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="invite-family-form">
+                    <div class="form-group">
+                        <label for="family-member-name">Name</label>
+                        <input type="text" id="family-member-name" required placeholder="Enter family member's name">
+                    </div>
+                    <div class="form-group">
+                        <label for="family-member-email">Email</label>
+                        <input type="email" id="family-member-email" required placeholder="Enter email address">
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn secondary" onclick="closeModal('invite-family-modal')">Cancel</button>
+                        <button type="submit" class="btn primary">
+                            <i class="fas fa-paper-plane"></i>
+                            Send Invitation
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay" style="display: none;">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <p id="loading-text">Processing...</p>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/static/script.js?v=20251009-auth-fix"></script>
+    
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/static/sw.js')
+                    .then(registration => {
+                        console.log('MyEstateAlly PWA: Service Worker registered successfully');
+                    })
+                    .catch(error => {
+                        console.log('MyEstateAlly PWA: Service Worker registration failed');
+                    });
+            });
+        }
+
+        // PWA Install Prompt
+        let deferredPrompt;
+        const installBtn = document.getElementById('install-btn');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            installBtn.style.display = 'block';
+            console.log('MyEstateAlly PWA: Install prompt available');
+        });
+
+        installBtn.addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                console.log(`MyEstateAlly PWA: User ${outcome} the install prompt`);
+                deferredPrompt = null;
+                installBtn.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
+

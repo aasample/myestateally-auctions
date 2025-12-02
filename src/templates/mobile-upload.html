@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Upload - MyEstateAlly</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <meta name="theme-color" content="#7c3aed">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="MyEstateAlly">
+</head>
+<body>
+    <div class="mobile-upload-container">
+        <div class="mobile-header">
+            <h1><i class="fas fa-camera"></i> Mobile Upload</h1>
+            <p>Take a photo to add to your estate inventory</p>
+            <div id="connection-status" style="margin-top: 10px; font-size: 12px; color: #666;">
+                <span id="connection-indicator">🔄 Checking connection...</span>
+            </div>
+        </div>
+
+        <div class="upload-section">
+            <!-- Upload Options -->
+            <div class="upload-options" id="upload-options">
+                <h3 style="text-align: center; margin-bottom: 20px; color: #374151;">Choose how to add your photo:</h3>
+                <div class="option-buttons">
+                    <button class="option-btn camera-btn" id="camera-btn">
+                        <i class="fas fa-camera"></i>
+                        <span>Take Photo</span>
+                        <small>Use your camera</small>
+                    </button>
+                    <button class="option-btn gallery-btn" id="gallery-btn">
+                        <i class="fas fa-images"></i>
+                        <span>Choose from Gallery</span>
+                        <small>Select existing photo</small>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Hidden file inputs -->
+            <input type="file" id="camera-input" accept="image/*,.heic,.heif" capture="environment" style="display: none;">
+            <input type="file" id="gallery-input" accept="image/*,.heic,.heif" style="display: none;">
+
+            <!-- Upload Area (for drag & drop) -->
+            <div class="upload-area" id="upload-area" style="display: none;">
+                <div class="upload-placeholder" id="upload-placeholder">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <p>Tap to take a photo or select from gallery</p>
+                    <small>Supports JPG, PNG, HEIC</small>
+                </div>
+            </div>
+
+            <div class="preview-container" id="preview-container" style="display: none;">
+                <img id="preview-image" src="" alt="Preview">
+                <div class="preview-actions">
+                    <button id="retake-btn" class="btn btn-secondary">
+                        <i class="fas fa-redo"></i> Retake
+                    </button>
+                    <button id="upload-btn" class="btn btn-primary">
+                        <i class="fas fa-upload"></i> Upload
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="loading-container" id="loading-container" style="display: none;">
+            <div class="loading-spinner">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>Analyzing photo with AI...</p>
+            </div>
+        </div>
+
+        <div class="result-container" id="result-container" style="display: none;">
+            <div class="success-message">
+                <i class="fas fa-check-circle"></i>
+                <h3>Upload Successful!</h3>
+                <p id="result-message">Your photo has been analyzed and added to your inventory.</p>
+                <div style="display: flex; gap: 10px; justify-content: center;">
+                    <button id="close-btn" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Close
+                    </button>
+                    <button id="refresh-main-btn" class="btn btn-primary">
+                        <i class="fas fa-sync"></i> Refresh Main Page
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="error-container" id="error-container" style="display: none;">
+            <div class="error-message">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h3>Upload Failed</h3>
+                <p id="error-message">There was an error uploading your photo. Please try again.</p>
+                <button id="retry-btn" class="btn btn-primary">
+                    <i class="fas fa-redo"></i> Try Again
+                </button>
+            </div>
+        </div>
+
+        <div class="troubleshooting-section" style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; font-size: 14px;">
+            <h4 style="margin-bottom: 10px; color: #495057;">📱 Troubleshooting Tips:</h4>
+            <ul style="margin: 0; padding-left: 20px; color: #6c757d;">
+                <li>Make sure you have a good internet connection</li>
+                <li>Try a smaller image (under 2MB)</li>
+                <li>Use JPG or PNG format</li>
+                <li>Try refreshing the page and scanning the QR code again</li>
+                <li>Make sure you're connected to the same network as your computer</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        class MobileUploadApp {
+            constructor() {
+                this.sessionId = '{{ session_id }}';
+                this.selectedFile = null;
+                this.init();
+            }
+
+            init() {
+                this.setupEventListeners();
+                this.checkConnection();
+            }
+
+            async checkConnection() {
+                try {
+                    const response = await fetch('/api/qr/generate', { method: 'POST' });
+                    const indicator = document.getElementById('connection-indicator');
+                    if (response.ok) {
+                        indicator.innerHTML = '✅ Connected to server';
+                        indicator.style.color = '#28a745';
+                    } else {
+                        indicator.innerHTML = '❌ Server connection failed';
+                        indicator.style.color = '#dc3545';
+                    }
+                } catch (error) {
+                    const indicator = document.getElementById('connection-indicator');
+                    indicator.innerHTML = '❌ Cannot reach server';
+                    indicator.style.color = '#dc3545';
+                }
+            }
+
+            setupEventListeners() {
+                const cameraBtn = document.getElementById('camera-btn');
+                const galleryBtn = document.getElementById('gallery-btn');
+                const cameraInput = document.getElementById('camera-input');
+                const galleryInput = document.getElementById('gallery-input');
+                const retakeBtn = document.getElementById('retake-btn');
+                const uploadBtn = document.getElementById('upload-btn');
+                const closeBtn = document.getElementById('close-btn');
+                const retryBtn = document.getElementById('retry-btn');
+                const refreshMainBtn = document.getElementById('refresh-main-btn');
+
+                // Camera button - opens camera
+                cameraBtn.addEventListener('click', () => {
+                    cameraInput.click();
+                });
+
+                // Gallery button - opens photo library
+                galleryBtn.addEventListener('click', () => {
+                    galleryInput.click();
+                });
+
+                // Handle camera input
+                cameraInput.addEventListener('change', (e) => {
+                    this.handleFileSelect(e.target.files[0]);
+                });
+
+                // Handle gallery input
+                galleryInput.addEventListener('change', (e) => {
+                    this.handleFileSelect(e.target.files[0]);
+                });
+
+                retakeBtn.addEventListener('click', () => {
+                    this.resetUpload();
+                });
+
+                uploadBtn.addEventListener('click', () => {
+                    this.uploadPhoto();
+                });
+
+                closeBtn.addEventListener('click', () => {
+                    window.close();
+                });
+
+                retryBtn.addEventListener('click', () => {
+                    this.resetUpload();
+                });
+
+                refreshMainBtn.addEventListener('click', () => {
+                    if (window.opener && !window.opener.closed) {
+                        try {
+                            window.opener.postMessage({type: 'inventory_updated'}, '*');
+                            window.opener.focus();
+                        } catch (e) {
+                            console.log('Could not notify parent window');
+                        }
+                    } else {
+                        // If no parent window, try to redirect to main page
+                        window.location.href = '/';
+                    }
+                });
+            }
+
+            handleFileSelect(file) {
+                if (!file) return;
+
+                // Validate file type
+                const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/heic', 'image/heif'];
+                if (!validTypes.includes(file.type) && !file.name.toLowerCase().match(/\.(jpg|jpeg|png|heic|heif)$/)) {
+                    this.showError('Please select a valid image file (JPG, PNG, HEIC)');
+                    return;
+                }
+
+                // Check file size (10MB limit)
+                if (file.size > 10 * 1024 * 1024) {
+                    this.showError('Image is too large. Please try a smaller image.');
+                    return;
+                }
+
+                this.selectedFile = file;
+                this.showPreview(file);
+            }
+
+            showPreview(file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const previewImage = document.getElementById('preview-image');
+                    previewImage.src = e.target.result;
+                    
+                    document.getElementById('upload-options').style.display = 'none';
+                    document.getElementById('upload-area').style.display = 'none';
+                    document.getElementById('preview-container').style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+
+            async uploadPhoto() {
+                if (!this.selectedFile) return;
+
+                this.showLoading();
+
+                try {
+                    // Test connection first
+                    console.log('Testing connection...');
+                    const testResponse = await fetch('/api/qr/generate', { method: 'POST' });
+                    if (!testResponse.ok) {
+                        throw new Error(`Connection test failed: ${testResponse.status} ${testResponse.statusText}`);
+                    }
+                    console.log('Connection test passed');
+
+                    const formData = new FormData();
+                    formData.append('photo', this.selectedFile);
+                    formData.append('session_id', this.sessionId);
+
+                    console.log('Uploading file:', this.selectedFile.name, 'Session ID:', this.sessionId);
+
+                    const response = await fetch('/api/mobile/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    console.log('Response status:', response.status);
+                    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    const responseText = await response.text();
+                    console.log('Raw response:', responseText);
+                    
+                    let result;
+                    try {
+                        result = JSON.parse(responseText);
+                    } catch (parseError) {
+                        console.error('JSON parse error:', parseError);
+                        console.error('Response was not JSON:', responseText.substring(0, 500));
+                        throw new Error('Server returned invalid response. Please try again.');
+                    }
+                    
+                    console.log('Parsed result:', result);
+
+                    if (result.success) {
+                        let successMessage = result.message || 'Photo uploaded successfully!';
+                        if (result.item) {
+                            successMessage += `\n\nItem: ${result.item.name}\nCategory: ${result.item.category}\nEstimated Value: $${result.item.estimatedValue.toFixed(2)}`;
+                        }
+                        this.showSuccess(successMessage);
+                        
+                        // Notify the main window to refresh inventory if it's open
+                        if (window.opener && !window.opener.closed) {
+                            try {
+                                window.opener.postMessage({type: 'inventory_updated'}, '*');
+                            } catch (e) {
+                                console.log('Could not notify parent window');
+                            }
+                        }
+                    } else {
+                        throw new Error(result.error || 'Upload failed');
+                    }
+                } catch (error) {
+                    console.error('Upload error:', error);
+                    console.error('Error details:', {
+                        name: error.name,
+                        message: error.message,
+                        stack: error.stack
+                    });
+                    
+                    // Show more detailed error message
+                    let errorMsg = 'Upload failed. Please try again.';
+                    if (error.message) {
+                        errorMsg += ` (${error.message})`;
+                    }
+                    this.showError(errorMsg);
+                } finally {
+                    this.hideLoading();
+                }
+            }
+
+            showLoading() {
+                document.getElementById('preview-container').style.display = 'none';
+                document.getElementById('loading-container').style.display = 'block';
+            }
+
+            hideLoading() {
+                document.getElementById('loading-container').style.display = 'none';
+            }
+
+            showSuccess(message) {
+                const messageElement = document.getElementById('result-message');
+                messageElement.innerHTML = message.replace(/\n/g, '<br>');
+                document.getElementById('result-container').style.display = 'block';
+            }
+
+            showError(message) {
+                const errorElement = document.getElementById('error-message');
+                errorElement.innerHTML = message;
+                document.getElementById('error-container').style.display = 'block';
+                
+                // Also show error details for debugging
+                const debugInfo = document.createElement('div');
+                debugInfo.style.marginTop = '10px';
+                debugInfo.style.padding = '10px';
+                debugInfo.style.backgroundColor = '#f8f9fa';
+                debugInfo.style.borderRadius = '5px';
+                debugInfo.style.fontSize = '12px';
+                debugInfo.style.color = '#666';
+                debugInfo.innerHTML = `
+                    <strong>Debug Info:</strong><br>
+                    Session ID: ${this.sessionId}<br>
+                    File Name: ${this.selectedFile ? this.selectedFile.name : 'None'}<br>
+                    File Size: ${this.selectedFile ? Math.round(this.selectedFile.size / 1024) + ' KB' : 'None'}<br>
+                    File Type: ${this.selectedFile ? this.selectedFile.type : 'None'}<br>
+                    Current URL: ${window.location.href}
+                `;
+                errorElement.appendChild(debugInfo);
+            }
+
+            resetUpload() {
+                this.selectedFile = null;
+                document.getElementById('camera-input').value = '';
+                document.getElementById('gallery-input').value = '';
+                document.getElementById('upload-options').style.display = 'block';
+                document.getElementById('upload-area').style.display = 'none';
+                document.getElementById('preview-container').style.display = 'none';
+                document.getElementById('result-container').style.display = 'none';
+                document.getElementById('error-container').style.display = 'none';
+            }
+        }
+
+        // Initialize the app when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new MobileUploadApp();
+        });
+    </script>
+
+    <style>
+        .mobile-upload-container {
+            max-width: 400px;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .mobile-header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .mobile-header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .mobile-header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .upload-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+
+        .upload-area {
+            border: 3px dashed #7c3aed;
+            border-radius: 10px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .upload-area:hover {
+            border-color: #5b21b6;
+            background: #f8fafc;
+        }
+
+        .upload-placeholder i {
+            font-size: 3rem;
+            color: #7c3aed;
+            margin-bottom: 15px;
+        }
+
+        .upload-placeholder p {
+            font-size: 1.2rem;
+            color: #374151;
+            margin-bottom: 10px;
+        }
+
+        .upload-placeholder small {
+            color: #6b7280;
+        }
+
+        .upload-options {
+            margin-bottom: 20px;
+        }
+
+        .option-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .option-btn {
+            flex: 1;
+            min-width: 140px;
+            padding: 20px 15px;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .option-btn:hover {
+            border-color: #7c3aed;
+            background: #f8fafc;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.15);
+        }
+
+        .option-btn i {
+            font-size: 2rem;
+            color: #7c3aed;
+        }
+
+        .option-btn span {
+            font-weight: 600;
+            color: #374151;
+            font-size: 1rem;
+        }
+
+        .option-btn small {
+            color: #6b7280;
+            font-size: 0.85rem;
+        }
+
+        .camera-btn:hover i {
+            color: #5b21b6;
+        }
+
+        .gallery-btn:hover i {
+            color: #5b21b6;
+        }
+
+        .preview-container {
+            text-align: center;
+        }
+
+        .preview-container img {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .preview-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: #7c3aed;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5b21b6;
+        }
+
+        .btn-secondary {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .btn-secondary:hover {
+            background: #d1d5db;
+        }
+
+        .loading-container, .result-container, .error-container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .loading-spinner i {
+            font-size: 2rem;
+            color: #7c3aed;
+            margin-bottom: 15px;
+        }
+
+        .success-message i {
+            font-size: 3rem;
+            color: #10b981;
+            margin-bottom: 15px;
+        }
+
+        .error-message i {
+            font-size: 3rem;
+            color: #ef4444;
+            margin-bottom: 15px;
+        }
+
+        .success-message h3, .error-message h3 {
+            margin-bottom: 10px;
+            color: #374151;
+        }
+
+        .success-message p, .error-message p {
+            color: #6b7280;
+            margin-bottom: 20px;
+        }
+    </style>
+</body>
+</html>
+
