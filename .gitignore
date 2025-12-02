@@ -1,0 +1,83 @@
+# MyEstateAlly - Git Ignore File
+# This prevents sensitive files from being committed to GitHub
+
+# === SECRETS & CREDENTIALS ===
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+secrets/
+credentials.json
+service-account.json
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# === Virtual Environments ===
+venv/
+ENV/
+env/
+.venv
+
+# === IDEs ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# === Testing ===
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# === Databases & Storage ===
+*.db
+*.sqlite
+*.sqlite3
+*.json
+!package.json
+!package-lock.json
+
+# === Logs ===
+*.log
+logs/
+
+# === Temporary Files ===
+tmp/
+temp/
+*.tmp
+uploads/
+
+# === Google Cloud ===
+.gcloudignore
+gcloud_credentials.json
+
+# === OS ===
+Thumbs.db
+.DS_Store
