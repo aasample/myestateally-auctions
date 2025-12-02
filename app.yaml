@@ -5,9 +5,9 @@ service: default
 instance_class: F2
 
 automatic_scaling:
-  min_instances: 1
+  min_instances: 0
   max_instances: 10
-  target_cpu_utilization: 0.6
+  target_cpu_utilization: 0.65
 
 # ===== SECURE CONFIGURATION =====
 # Secrets are loaded from Google Cloud Secret Manager
@@ -15,15 +15,20 @@ automatic_scaling:
 
 env_variables:
   FLASK_ENV: production
-  FLASK_DEBUG: false
+  FLASK_DEBUG: "false"
 
-# === OPTION 1: Use Secret Manager (Recommended) ===
-# Uncomment these lines after setting up Secret Manager:
-# env_variables:
-#   SECRET_KEY: ${SECRET_KEY}
-#   OPENAI_API_KEY: ${OPENAI_API_KEY}
-#   GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-#   GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+  # Secrets from Secret Manager
+  SECRET_KEY: projects/estateally-ai-services/secrets/SECRET_KEY/versions/latest
+  OPENAI_API_KEY: projects/estateally-ai-services/secrets/OPENAI_API_KEY/versions/latest
+  GOOGLE_CLIENT_ID: projects/estateally-ai-services/secrets/GOOGLE_CLIENT_ID/versions/latest
+  GOOGLE_CLIENT_SECRET: projects/estateally-ai-services/secrets/GOOGLE_CLIENT_SECRET/versions/latest
+
+  # Other non-secret configuration
+  GOOGLE_REDIRECT_URI: https://estateally-ai-services.ue.r.appspot.com/auth/google/callback
+  MAIL_SERVER: smtp.gmail.com
+  MAIL_PORT: "587"
+  MAIL_USE_TLS: "true"
+  MAIL_DEFAULT_SENDER: noreply@myestateally.com
 
 handlers:
 - url: /static
