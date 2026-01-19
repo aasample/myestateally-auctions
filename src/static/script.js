@@ -2517,26 +2517,43 @@ async function handleMfaVerification(event) {
 function setupMfaDisplay(secret, email) {
     const qrCodeContainer = document.getElementById('mfa-qr-code');
     const secretCodeEl = document.getElementById('mfa-secret-code');
-    
+
     // Format secret for display
     const formattedSecret = secret.match(/.{1,4}/g).join(' ');
     secretCodeEl.textContent = formattedSecret;
-    
+
     // Generate QR code
     const otpauthUrl = `otpauth://totp/MyEstateAlly:${encodeURIComponent(email)}?secret=${secret}&issuer=MyEstateAlly`;
-    
-    // Create QR code using a simple library or canvas
-    // For now, show a placeholder
-    qrCodeContainer.innerHTML = `
-        <div style="width: 200px; height: 200px; background: white; display: flex; align-items: center; justify-content: center; border: 2px solid #e5e7eb; border-radius: 8px;">
-            <div style="text-align: center; padding: 20px;">
-                <i class="fas fa-qrcode" style="font-size: 48px; color: #7c3aed;"></i>
-                <p style="margin-top: 10px; font-size: 12px; color: #6b7280;">
-                    Use your authenticator app to scan<br>
-                    <small>Google Authenticator, Authy, etc.</small>
-                </p>
-            </div>
-        </div>
+
+    // Clear container and create QR code
+    qrCodeContainer.innerHTML = '';
+
+    // Check if QRCode library is available
+    if (typeof QRCode !== 'undefined') {
+        try {
+            new QRCode(qrCodeContainer, {
+                text: otpauthUrl,
+                width: 200,
+                height: 200,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        } catch (error) {
+            console.error('QR code generation error:', error);
+            showQRCodeFallback(qrCodeContainer, otpauthUrl);
+        }
+    } else {
+        // Fallback: Use Google Charts API to generate QR code
+        showQRCodeFallback(qrCodeContainer, otpauthUrl);
+    }
+}
+
+function showQRCodeFallback(container, otpauthUrl) {
+    // Use Google Charts API as fallback
+    const qrUrl = `https://chart.googleapis.com/chart?chs=200x200&cht=qr&chl=${encodeURIComponent(otpauthUrl)}&choe=UTF-8`;
+    container.innerHTML = `
+        <img src="${qrUrl}" alt="MFA QR Code" style="width: 200px; height: 200px; border: 2px solid #e5e7eb; border-radius: 8px;">
     `;
 }
 
