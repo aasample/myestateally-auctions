@@ -17,6 +17,9 @@ gunicorn==21.2.0
 # Email functionality
 Flask-Mail==0.10.0
 
+# Rate limiting
+Flask-Limiter==4.1.1
+
 # PDF generation
 reportlab==4.0.4
 
