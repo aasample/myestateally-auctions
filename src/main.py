@@ -2210,32 +2210,45 @@ def verify_mfa_setup():
         # Get user from session
         if session_id and session_id in auth_storage.get('mfa_sessions', {}):
             user_id = auth_storage['mfa_sessions'][session_id]['user_id']
-            user = auth_storage['users'].get(user_id)
-            
+
+            # Get user from Firestore or JSON
+            if USE_FIRESTORE:
+                user = firestore_get_user(user_id)
+            else:
+                user = auth_storage['users'].get(user_id)
+
             if user:
                 # Save MFA secret to user
                 user['mfa_secret'] = secret
                 user['mfa_enabled'] = True
-                auth_storage['users'][user_id] = user
-                save_auth_storage()
-                
+
+                # Update in Firestore or JSON
+                if USE_FIRESTORE:
+                    firestore_update_user(user_id, {
+                        'mfa_secret': secret,
+                        'mfa_enabled': True
+                    })
+                else:
+                    auth_storage['users'][user_id] = user
+                    save_auth_storage()
+
                 # Create session
                 session['user_id'] = user_id
                 session['user_email'] = user['email']
-                
+
                 # Clean up MFA session
                 del auth_storage['mfa_sessions'][session_id]
-                
+
                 return jsonify({
                     'success': True,
                     'user': {
                         'id': user_id,
                         'email': user['email'],
                         'name': user['name'],
-                        'provider': user['provider']
+                        'provider': user.get('provider', 'email')
                     }
                 })
-        
+
         return jsonify({'success': False, 'error': 'Session not found'}), 401
         
     except Exception as e:
