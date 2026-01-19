@@ -88,23 +88,50 @@ logger.info("Using Flask's built-in session management (cookie-based)")
 # OAuth Configuration
 oauth = OAuth(app)
 
-# Google OAuth
-google = oauth.register(
-    name='google',
-    client_id=os.environ.get('GOOGLE_CLIENT_ID', ''),
-    client_secret=os.environ.get('GOOGLE_CLIENT_SECRET', ''),
-    server_metadata_url='https://accounts.google.com/.well-known/openid_configuration',
-    client_kwargs={'scope': 'openid email profile'}
-)
+# Google OAuth (only if credentials are configured)
+google = None
+try:
+    google_client_id = os.environ.get('GOOGLE_CLIENT_ID', '')
+    google_client_secret = os.environ.get('GOOGLE_CLIENT_SECRET', '')
 
-# Facebook OAuth
-facebook = oauth.register(
-    name='facebook',
-    client_id=os.environ.get('FACEBOOK_CLIENT_ID', ''),
-    client_secret=os.environ.get('FACEBOOK_CLIENT_SECRET', ''),
-    server_metadata_url='https://www.facebook.com/.well-known/openid_configuration',
-    client_kwargs={'scope': 'email'}
-)
+    if google_client_id and google_client_secret:
+        google = oauth.register(
+            name='google',
+            client_id=google_client_id,
+            client_secret=google_client_secret,
+            access_token_url='https://oauth2.googleapis.com/token',
+            authorize_url='https://accounts.google.com/o/oauth2/v2/auth',
+            userinfo_endpoint='https://www.googleapis.com/oauth2/v3/userinfo',
+            client_kwargs={
+                'scope': 'openid email profile',
+                'token_endpoint_auth_method': 'client_secret_post'
+            }
+        )
+        logger.info("Google OAuth configured")
+    else:
+        logger.warning("Google OAuth not configured - credentials missing")
+except Exception as e:
+    logger.warning(f"Failed to configure Google OAuth: {e}")
+
+# Facebook OAuth (only if credentials are configured)
+facebook = None
+try:
+    facebook_client_id = os.environ.get('FACEBOOK_CLIENT_ID', '')
+    facebook_client_secret = os.environ.get('FACEBOOK_CLIENT_SECRET', '')
+
+    if facebook_client_id and facebook_client_secret:
+        facebook = oauth.register(
+            name='facebook',
+            client_id=facebook_client_id,
+            client_secret=facebook_client_secret,
+            server_metadata_url='https://www.facebook.com/.well-known/openid_configuration',
+            client_kwargs={'scope': 'email'}
+        )
+        logger.info("Facebook OAuth configured")
+    else:
+        logger.warning("Facebook OAuth not configured - credentials missing")
+except Exception as e:
+    logger.warning(f"Failed to configure Facebook OAuth: {e}")
 
 # File-based storage (replace with database in production)
 import json
@@ -4673,12 +4700,17 @@ except Exception as e:
 
 @app.route('/auth/google/login')
 def auth_google_login():
+    # Check if Google OAuth is configured
+    if not google:
+        logger.warning("Google OAuth login attempted but not configured")
+        return jsonify({'success': False, 'error': 'Google OAuth not configured - please use email/password login'}), 400
+
     logger.info(f"Google OAuth login requested. OAuth ready: {_oauth_ready}")
     if not oauth or not _oauth_ready:
         return jsonify({'success': False, 'error': 'Google OAuth not configured'}), 400
     if 'google' not in oauth._clients:
         return jsonify({'success': False, 'error': 'Google OAuth client not registered'}), 400
-    
+
     try:
         redirect_uri = OAUTH_CONFIG['google']['redirect_uri'] or url_for('auth_google_callback', _external=True)
         logger.info(f"Redirecting to Google OAuth with redirect_uri: {redirect_uri}")
@@ -4689,6 +4721,11 @@ def auth_google_login():
 
 @app.route('/auth/google/callback')
 def auth_google_callback():
+    # Check if Google OAuth is configured
+    if not google:
+        logger.error("Google OAuth callback received but not configured")
+        return redirect(url_for('index') + '?error=oauth_not_configured')
+
     if not oauth or 'google' not in oauth._clients:
         logger.error("Google OAuth not configured or client not registered")
         return jsonify({'success': False, 'error': 'Google OAuth not configured'}), 400

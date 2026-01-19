@@ -2359,28 +2359,30 @@ async function handleSignup(event) {
     const password = document.getElementById('signup-password').value;
     const confirmPassword = document.getElementById('signup-password-confirm').value;
     const enableMfa = document.getElementById('enable-mfa').checked;
-    
+    const betaCode = document.getElementById('signup-beta-code')?.value?.trim().toUpperCase() || '';
+
     if (!authState.email || !name || !password) return;
-    
+
     if (password !== confirmPassword) {
         app.showMessage('Passwords do not match', 'error');
         return;
     }
-    
+
     if (password.length < 8) {
         app.showMessage('Password must be at least 8 characters', 'error');
         return;
     }
-    
+
     try {
         const response = await fetch('/api/auth/signup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                name, 
-                email: authState.email, 
+            body: JSON.stringify({
+                name,
+                email: authState.email,
                 password,
-                enable_mfa: enableMfa
+                enable_mfa: enableMfa,
+                beta_code: betaCode
             })
         });
         
