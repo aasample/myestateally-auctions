@@ -102,7 +102,11 @@ class MyEstateAllyApp {
                 
                 // If no estates exist, prompt to create one
                 if (!data.estates || data.estates.length === 0) {
-                    this.showMessage('Create your first estate to get started!', 'info');
+                    this.showMessage('Welcome! Create your first estate to get started.', 'info');
+                    // Automatically show the create estate modal for first-time users
+                    setTimeout(() => {
+                        this.showCreateEstateModal();
+                    }, 1000);
                 }
                 
                 return;
