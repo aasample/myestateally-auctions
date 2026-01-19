@@ -12,7 +12,7 @@ automatic_scaling:
 env_variables:
   FLASK_ENV: production
   FLASK_DEBUG: false
-  USE_FIRESTORE: "true"
+  USE_FIRESTORE: "false"  # Temporarily disabled - database is in Datastore Mode
   GOOGLE_CLOUD_PROJECT: estateally-ai-services
   GOOGLE_REDIRECT_URI: https://estateally-ai-services.ue.r.appspot.com/auth/google/callback
   REQUIRE_AUTH_FOR_ALL: "false"  # Allow beta testing without auth
