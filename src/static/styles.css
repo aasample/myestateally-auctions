@@ -425,7 +425,9 @@
     display: flex;
     gap: 8px;
     align-items: center;
-    margin-right: 12px;
+    margin-right: 24px;
+    padding-right: 24px;
+    border-right: 1px solid var(--border-color);
 }
 
 .estate-select {
@@ -688,6 +690,12 @@ a:hover {
     display: flex;
     justify-content: space-between;
     align-items: center;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
 }
 
 .logo {
