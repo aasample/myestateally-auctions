@@ -12,11 +12,11 @@ automatic_scaling:
 env_variables:
   FLASK_ENV: production
   FLASK_DEBUG: false
-  SECRET_KEY: myestateally-super-secure-secret-key-2024-production
-  OPENAI_API_KEY: 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
-  GOOGLE_CLIENT_ID: 534529839786-jn1008urf304qnugpg5goohgpqkgk76k.apps.googleusercontent.com
-  GOOGLE_CLIENT_SECRET: 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
+  USE_FIRESTORE: "true"
+  GOOGLE_CLOUD_PROJECT: estateally-ai-services
   GOOGLE_REDIRECT_URI: https://estateally-ai-services.ue.r.appspot.com/auth/google/callback
+  REQUIRE_AUTH_FOR_ALL: "false"  # Allow beta testing without auth
+  BETA_CODE: "ESTATEALLY2026"  # Beta testing access code
 
 handlers:
 - url: /static

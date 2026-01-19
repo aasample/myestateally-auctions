@@ -135,6 +135,17 @@ try:
 except Exception:
     _firestore_available = False
 
+# Initialize StorageService based on environment
+from src.services.storage_service import StorageService
+
+USE_FIRESTORE = os.environ.get('USE_FIRESTORE', 'false').lower() in ['true', '1', 'yes']
+storage_service = StorageService(use_firestore=USE_FIRESTORE)
+
+if USE_FIRESTORE:
+    logger.info("✅ Firestore storage enabled - data will persist across deployments")
+else:
+    logger.info("⚠️  JSON file storage enabled - data may be lost on deployment")
+
 firestore_client = None
 
 def get_firestore_client():
@@ -152,29 +163,73 @@ def get_firestore_client():
         return None
 
 def firestore_add_inventory_item(item):
-    client = get_firestore_client()
-    if client is None:
-        return False
-    client.collection('inventory').document(item['id']).set(item)
-    return True
+    """Add inventory item to Firestore"""
+    return storage_service.add_document('inventory', item['id'], item)
 
 def firestore_list_inventory_items():
-    client = get_firestore_client()
-    if client is None:
-        return None
-    docs = client.collection('inventory').stream()
-    items = []
-    for d in docs:
-        data = d.to_dict() or {}
-        if 'id' not in data:
-            data['id'] = d.id
-        items.append(data)
-    return items
+    """List inventory items from Firestore"""
+    return storage_service.list_documents('inventory')
 
-# Load existing data
-inventory_storage = load_storage('inventory.json')
-user_storage = load_storage('users.json')
-family_storage = load_storage('family.json')
+def firestore_delete_inventory_item(item_id):
+    """Delete inventory item from Firestore"""
+    return storage_service.delete_document('inventory', item_id)
+
+def firestore_get_inventory_item(item_id):
+    """Get a single inventory item from Firestore"""
+    return storage_service.get_document('inventory', item_id)
+
+def firestore_update_inventory_item(item):
+    """Update inventory item in Firestore"""
+    item_id = item.get('id')
+    if not item_id:
+        logger.error("Cannot update item without ID")
+        return False
+    return storage_service.add_document('inventory', item_id, item)
+
+def firestore_add_user(user_data):
+    """Add user to Firestore"""
+    user_id = user_data.get('id') or user_data.get('user_id')
+    if not user_id:
+        logger.error("Cannot add user without ID")
+        return False
+    return storage_service.add_document('users', user_id, user_data)
+
+def firestore_get_user(user_id):
+    """Get user from Firestore"""
+    return storage_service.get_document('users', user_id)
+
+def firestore_get_user_by_email(email):
+    """Get user by email from Firestore"""
+    if not USE_FIRESTORE or not storage_service.db:
+        return None
+    try:
+        users_ref = storage_service.db.collection('users')
+        query = users_ref.where('email', '==', email.lower()).limit(1)
+        docs = list(query.stream())
+        if docs:
+            data = docs[0].to_dict()
+            data['id'] = docs[0].id
+            return data
+        return None
+    except Exception as e:
+        logger.error(f"Failed to get user by email: {e}")
+        return None
+
+def firestore_update_user(user_id, updates):
+    """Update user in Firestore"""
+    if not USE_FIRESTORE or not storage_service.db:
+        return False
+    try:
+        storage_service.db.collection('users').document(user_id).update(updates)
+        return True
+    except Exception as e:
+        logger.error(f"Failed to update user: {e}")
+        return False
+
+# Load existing data (fallback to JSON if Firestore not enabled)
+inventory_storage = load_storage('inventory.json') if not USE_FIRESTORE else {}
+user_storage = load_storage('users.json') if not USE_FIRESTORE else {}
+family_storage = load_storage('family.json') if not USE_FIRESTORE else {}
 if not family_storage or 'estates' not in family_storage:  # Initialize if empty or legacy format
     family_storage = {
         'estates': {},  # estate_id: {members, wanted_items, sharing_settings, share_links, assignment_decisions, estate_timeline}
@@ -292,6 +347,14 @@ def get_current_user():
     if not is_authenticated():
         return None
     user_id = session['user_id']
+
+    # Check Firestore first if enabled
+    if USE_FIRESTORE:
+        user = firestore_get_user(user_id)
+        if user:
+            return user
+
+    # Fallback to memory storage
     return auth_storage['users'].get(user_id)
 
 def require_auth(f):
@@ -329,11 +392,13 @@ def sanitize_string(value, max_length=500):
     return sanitized
 
 def save_auth_storage():
-    """Save authentication data to file"""
+    """Save authentication data to file or Firestore"""
     try:
-        # On Google App Engine, we can't write to the file system
-        # So we'll just log the storage update
-        if os.environ.get('GAE_ENV'):
+        if USE_FIRESTORE:
+            logger.info(f"Auth storage using Firestore: {len(auth_storage.get('users', {}))} users in memory")
+            # Note: Users are saved individually via firestore_add_user()
+            return
+        elif os.environ.get('GAE_ENV'):
             logger.info(f"Auth storage updated (GAE mode): {len(auth_storage.get('users', {}))} users")
         else:
             # Local development - save to file
@@ -2178,20 +2243,23 @@ def login():
                 'error': 'Password too long'
             }), 400
         
-        # Find user by email
+        # Find user by email (Firestore or JSON)
         user = None
-        for user_id, user_data in auth_storage['users'].items():
-            if user_data.get('email') == email:
-                user = user_data
-                user['id'] = user_id
-                break
-        
+        if USE_FIRESTORE:
+            user = firestore_get_user_by_email(email)
+        else:
+            for user_id, user_data in auth_storage['users'].items():
+                if user_data.get('email') == email:
+                    user = user_data
+                    user['id'] = user_id
+                    break
+
         if not user:
             return jsonify({
                 'success': False,
                 'error': 'Invalid email or password'
             }), 401
-        
+
         # Verify password
         if not verify_password(password, user.get('password_hash', '')):
             return jsonify({
@@ -2221,8 +2289,11 @@ def login():
         
         # Update last login
         user['last_login'] = datetime.now().isoformat()
-        auth_storage['users'][user['id']] = user
-        save_auth_storage()
+        if USE_FIRESTORE:
+            firestore_update_user(user['id'], {'last_login': user['last_login']})
+        else:
+            auth_storage['users'][user['id']] = user
+            save_auth_storage()
         
         # Create session
         session['user_id'] = user['id']
@@ -2263,6 +2334,7 @@ def signup():
         email = sanitize_string(data.get('email')).lower().strip()
         password = data.get('password', '')
         name = sanitize_string(data.get('name', '').strip(), max_length=100)
+        beta_code = sanitize_string(data.get('beta_code', '').strip(), max_length=50)
 
         # Validate email format
         if not validate_email(email):
@@ -2284,31 +2356,52 @@ def signup():
                 'error': 'Password too long'
             }), 400
 
-        # Check if user already exists
-        for user_id, user_data in auth_storage['users'].items():
-            if user_data.get('email') == email:
+        # Check if user already exists (Firestore or JSON)
+        if USE_FIRESTORE:
+            existing_user = firestore_get_user_by_email(email)
+            if existing_user:
                 return jsonify({
                     'success': False,
                     'error': 'User with this email already exists'
                 }), 400
-        
+        else:
+            for user_id, user_data in auth_storage['users'].items():
+                if user_data.get('email') == email:
+                    return jsonify({
+                        'success': False,
+                        'error': 'User with this email already exists'
+                    }), 400
+
+        # Determine account type based on beta code
+        BETA_CODE = os.environ.get('BETA_CODE', 'ESTATEALLY2026')
+        account_type = 'beta' if beta_code == BETA_CODE else 'free'
+        grandfathered = (account_type == 'beta')
+
         # Check if MFA should be enabled
         enable_mfa = data.get('enable_mfa', False)
-        
-        # Create new user
+
+        # Create new user with account_type field
         user_id = generate_user_id()
         user_data = {
+            'id': user_id,
             'email': email,
             'name': name or email.split('@')[0].title(),
             'provider': 'email',
             'password_hash': hash_password(password),
             'created_at': datetime.now().isoformat(),
             'last_login': datetime.now().isoformat(),
-            'mfa_enabled': False
+            'mfa_enabled': False,
+            'account_type': account_type,
+            'grandfathered': grandfathered,
+            'stripe_customer_id': None
         }
-        
-        auth_storage['users'][user_id] = user_data
-        save_auth_storage()
+
+        # Save to Firestore or JSON
+        if USE_FIRESTORE:
+            firestore_add_user(user_data)
+        else:
+            auth_storage['users'][user_id] = user_data
+            save_auth_storage()
         
         # If MFA requested, generate secret and return it
         if enable_mfa:
