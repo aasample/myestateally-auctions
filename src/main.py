@@ -20,6 +20,8 @@ from email.mime.base import MIMEBase
 from email import encoders
 from flask import Flask, request, jsonify, render_template, send_from_directory, redirect, make_response, url_for, session
 from flask_mail import Mail, Message
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from werkzeug.utils import secure_filename
 from authlib.integrations.flask_client import OAuth
 from authlib.common.security import generate_token
@@ -60,6 +62,15 @@ app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', 'norep
 
 # Initialize Flask-Mail
 mail = Mail(app)
+
+# Initialize Rate Limiter
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://",
+)
+logger.info("Rate limiting initialized")
 
 # Load environment variables
 load_dotenv()
@@ -292,6 +303,31 @@ def require_auth(f):
     decorated_function.__name__ = f.__name__
     return decorated_function
 
+def validate_required_fields(data, required_fields):
+    """Validate that required fields are present and non-empty"""
+    if not data:
+        return False, "No data provided"
+
+    for field in required_fields:
+        if field not in data or not data[field]:
+            return False, f"Missing required field: {field}"
+
+    return True, None
+
+def validate_email(email):
+    """Basic email validation"""
+    if not email or '@' not in email or '.' not in email.split('@')[1]:
+        return False
+    return True
+
+def sanitize_string(value, max_length=500):
+    """Sanitize string input to prevent injection attacks"""
+    if not isinstance(value, str):
+        return str(value)
+    # Strip dangerous characters and limit length
+    sanitized = value.strip()[:max_length]
+    return sanitized
+
 def save_auth_storage():
     """Save authentication data to file"""
     try:
@@ -479,17 +515,53 @@ def save_estate_storage():
 def static_files(filename):
     return send_from_directory('static', filename)
 
+# Authentication enforcement configuration
+REQUIRE_AUTH_FOR_ALL = os.environ.get('REQUIRE_AUTH_FOR_ALL', 'false').lower() in ['true', '1', 'on']
+
+# Request hook for authentication enforcement
+@app.before_request
+def enforce_authentication():
+    """Enforce authentication for all routes if enabled"""
+    if not REQUIRE_AUTH_FOR_ALL:
+        return None
+
+    # Allow public endpoints
+    public_endpoints = [
+        'static_files',
+        'index',
+        'login',
+        'signup',
+        'auth_google_login',
+        'auth_google_callback',
+        'check_email'
+    ]
+
+    if request.endpoint in public_endpoints or request.path.startswith('/static/'):
+        return None
+
+    # Check if user is authenticated
+    if not is_authenticated():
+        if request.path.startswith('/api/'):
+            return jsonify({'success': False, 'error': 'Authentication required'}), 401
+        return render_template('auth_required.html'), 401
+
 # Main routes
 @app.route('/')
 def index():
-    # TODO: To require authentication for the entire site, uncomment the lines below:
-    # if not session.get('user_id'):
-    #     return render_template('auth_required.html')
     return render_template('index.html')
+
+# Debug endpoint protection - only enable in development
+def is_debug_mode():
+    """Check if debug endpoints should be enabled"""
+    flask_env = os.environ.get('FLASK_ENV', 'production').lower()
+    flask_debug = os.environ.get('FLASK_DEBUG', 'false').lower()
+    return flask_env == 'development' or flask_debug in ['true', '1', 'on']
 
 @app.route('/api/debug/version')
 def debug_version():
     """Debug endpoint to check if latest code is deployed"""
+    if not is_debug_mode():
+        return jsonify({'error': 'Debug endpoints are disabled in production'}), 403
     return jsonify({
         'version': '2025-10-03-v3',
         'setupPWA_exists': hasattr(MyEstateAllyApp if 'MyEstateAllyApp' in globals() else type('Dummy', (), {}), 'setupPWA'),
@@ -499,6 +571,8 @@ def debug_version():
 @app.route('/api/debug/inventory')
 def debug_inventory():
     """Debug endpoint to check inventory data structure"""
+    if not is_debug_mode():
+        return jsonify({'error': 'Debug endpoints are disabled in production'}), 403
     try:
         # Try Firestore first
         try:
@@ -551,6 +625,8 @@ def debug_inventory():
 @app.route('/api/debug/test-upload')
 def debug_test_upload():
     """Debug endpoint to test item creation"""
+    if not is_debug_mode():
+        return jsonify({'error': 'Debug endpoints are disabled in production'}), 403
     try:
         # Create a test item
         item_id = str(uuid.uuid4())
@@ -590,6 +666,8 @@ def debug_test_upload():
 @app.route('/api/debug/fix-images')
 def debug_fix_images():
     """Debug endpoint to fix image URLs in existing items"""
+    if not is_debug_mode():
+        return jsonify({'error': 'Debug endpoints are disabled in production'}), 403
     try:
         updated_count = 0
         
@@ -731,19 +809,41 @@ def add_item():
                 'success': False,
                 'error': 'No estate selected. Please create or select an estate first.'
             }), 400
-        
+
         data = request.get_json()
-        
+
+        # Validate required fields
+        valid, error = validate_required_fields(data, ['name'])
+        if not valid:
+            return jsonify({'success': False, 'error': error}), 400
+
+        # Sanitize inputs
+        name = sanitize_string(data.get('name', ''), max_length=200)
+        category = sanitize_string(data.get('category', ''), max_length=100)
+        description = sanitize_string(data.get('description', ''), max_length=2000)
+        assigned_to = sanitize_string(data.get('assignedTo', ''), max_length=100)
+
+        # Validate numeric value
+        try:
+            estimated_value = float(data.get('estimatedValue', 0))
+            if estimated_value < 0 or estimated_value > 999999999:
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid estimated value'
+                }), 400
+        except (ValueError, TypeError):
+            estimated_value = 0
+
         item_id = str(uuid.uuid4())
         item = {
             'id': item_id,
             'estate_id': estate_id,  # Associate with estate
-            'name': data.get('name', ''),
-            'category': data.get('category', ''),
-            'description': data.get('description', ''),
-            'estimatedValue': float(data.get('estimatedValue', 0)),
-            'forSale': data.get('forSale', False),
-            'assignedTo': data.get('assignedTo', ''),
+            'name': name,
+            'category': category,
+            'description': description,
+            'estimatedValue': estimated_value,
+            'forSale': bool(data.get('forSale', False)),
+            'assignedTo': assigned_to,
             'photo': data.get('photo', ''),
             'dateAdded': datetime.now().isoformat(),
             'lastModified': datetime.now().isoformat()
@@ -1221,6 +1321,8 @@ def pricing_history(item_id):
 @app.route('/api/debug/test-auth')
 def debug_test_auth():
     """Debug endpoint to test authentication components"""
+    if not is_debug_mode():
+        return jsonify({'error': 'Debug endpoints are disabled in production'}), 403
     try:
         test_password = "test123"
         hashed = hash_password(test_password)
@@ -1246,6 +1348,8 @@ def debug_test_auth():
 @app.route('/api/debug/email-status')
 def debug_email_status():
     """Debug endpoint to check email configuration and sent emails"""
+    if not is_debug_mode():
+        return jsonify({'error': 'Debug endpoints are disabled in production'}), 403
     try:
         return jsonify({
             'success': True,
@@ -1907,6 +2011,7 @@ def manage_share_link():
 
 # Email check endpoint for progressive auth
 @app.route('/api/auth/check-email', methods=['POST'])
+@limiter.limit("10 per minute")
 def check_email():
     """Check if email exists in the system"""
     try:
@@ -1930,6 +2035,7 @@ def check_email():
 
 # MFA verification endpoint
 @app.route('/api/auth/verify-mfa', methods=['POST'])
+@limiter.limit("5 per minute")  # Prevent MFA brute force
 def verify_mfa():
     """Verify MFA code during login"""
     try:
@@ -2045,17 +2151,31 @@ def verify_mfa_setup():
         return jsonify({'success': False, 'error': 'MFA setup verification failed'}), 500
 
 @app.route('/api/auth/login', methods=['POST'])
+@limiter.limit("5 per minute")  # Prevent brute force attacks
 def login():
     """Handle email/password login"""
     try:
         data = request.get_json()
-        email = data.get('email', '').lower().strip()
+
+        # Validate required fields
+        valid, error = validate_required_fields(data, ['email', 'password'])
+        if not valid:
+            return jsonify({'success': False, 'error': error}), 400
+
+        email = sanitize_string(data.get('email')).lower().strip()
         password = data.get('password', '')
-        
-        if not email or not password:
+
+        # Validate email format
+        if not validate_email(email):
             return jsonify({
                 'success': False,
-                'error': 'Email and password are required'
+                'error': 'Invalid email format'
+            }), 400
+
+        if len(password) > 128:  # Reasonable password length limit
+            return jsonify({
+                'success': False,
+                'error': 'Password too long'
             }), 400
         
         # Find user by email
@@ -2129,26 +2249,41 @@ def login():
         }), 500
 
 @app.route('/api/auth/signup', methods=['POST'])
+@limiter.limit("3 per hour")  # Prevent spam account creation
 def signup():
     """Handle email/password signup"""
     try:
         data = request.get_json()
-        email = data.get('email', '').lower().strip()
+
+        # Validate required fields
+        valid, error = validate_required_fields(data, ['email', 'password'])
+        if not valid:
+            return jsonify({'success': False, 'error': error}), 400
+
+        email = sanitize_string(data.get('email')).lower().strip()
         password = data.get('password', '')
-        name = data.get('name', '').strip()
-        
-        if not email or not password:
+        name = sanitize_string(data.get('name', '').strip(), max_length=100)
+
+        # Validate email format
+        if not validate_email(email):
             return jsonify({
                 'success': False,
-                'error': 'Email and password are required'
+                'error': 'Invalid email format'
             }), 400
-        
+
+        # Validate password length
         if len(password) < 6:
             return jsonify({
                 'success': False,
                 'error': 'Password must be at least 6 characters long'
             }), 400
-        
+
+        if len(password) > 128:
+            return jsonify({
+                'success': False,
+                'error': 'Password too long'
+            }), 400
+
         # Check if user already exists
         for user_id, user_data in auth_storage['users'].items():
             if user_data.get('email') == email:
@@ -4427,37 +4562,20 @@ def send_conflict_resolution_email(email, member_code, item_name, recipient, met
 def not_found(error):
     return jsonify({'success': False, 'error': 'Not found'}), 404
 
-# Google OAuth setup
-oauth = None
+# Note: OAuth is configured at the top of this file (lines 87-107)
+# Check if OAuth is properly configured
 _oauth_ready = False
-
 try:
-    from authlib.integrations.flask_client import OAuth
-    oauth = OAuth(app)
-    
-    # Check if we have valid Google OAuth credentials
-    google_client_id = OAUTH_CONFIG['google']['client_id']
-    google_client_secret = OAUTH_CONFIG['google']['client_secret']
-    
+    google_client_id = os.environ.get('GOOGLE_CLIENT_ID', '')
+    google_client_secret = os.environ.get('GOOGLE_CLIENT_SECRET', '')
+
     if google_client_id and google_client_secret and google_client_id != 'your-google-client-id':
-        oauth.register(
-            name='google',
-            client_id=google_client_id,
-            client_secret=google_client_secret,
-            access_token_url='https://oauth2.googleapis.com/token',
-            authorize_url='https://accounts.google.com/o/oauth2/v2/auth',
-            api_base_url='https://www.googleapis.com/oauth2/v2/',
-            client_kwargs={'scope': 'openid email profile'},
-            server_metadata_url='https://accounts.google.com/.well-known/openid-configuration'
-        )
         _oauth_ready = True
         logger.info("Google OAuth configured successfully")
     else:
         logger.warning("Google OAuth credentials not properly configured")
-        
 except Exception as e:
-    logger.error(f"OAuth setup failed: {e}")
-    oauth = None
+    logger.error(f"OAuth check failed: {e}")
     _oauth_ready = False
 
 @app.route('/auth/google/login')
