@@ -12,6 +12,8 @@ import base64
 import secrets
 import smtplib
 import tempfile
+import csv
+import io
 from datetime import datetime, timedelta
 from io import BytesIO
 from email.mime.text import MIMEText
@@ -28,6 +30,7 @@ from authlib.common.security import generate_token
 import bcrypt
 import hashlib
 from dotenv import load_dotenv
+from src.utils.image_utils import compress_image_to_base64, compress_image_to_data_url
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -158,9 +161,12 @@ def save_storage(filename, data):
 # Firestore (preferred on App Engine) setup
 try:
     from google.cloud import firestore  # type: ignore
+    from google.cloud import storage  # type: ignore
     _firestore_available = True
+    _storage_available = True
 except Exception:
     _firestore_available = False
+    _storage_available = False
 
 # Initialize StorageService based on environment
 from src.services.storage_service import StorageService
@@ -174,6 +180,7 @@ else:
     logger.info("⚠️  JSON file storage enabled - data may be lost on deployment")
 
 firestore_client = None
+storage_client = None
 
 def get_firestore_client():
     global firestore_client
@@ -187,6 +194,42 @@ def get_firestore_client():
         return firestore_client
     except Exception as e:
         logger.error(f"Failed to init Firestore: {e}")
+        return None
+
+def get_storage_client():
+    """Get Google Cloud Storage client"""
+    global storage_client
+    if storage_client is not None:
+        return storage_client
+    if not _storage_available:
+        return None
+    try:
+        storage_client = storage.Client()
+        logger.info("Cloud Storage client initialized")
+        return storage_client
+    except Exception as e:
+        logger.error(f"Failed to init Cloud Storage: {e}")
+        return None
+
+def get_storage_bucket():
+    """Get the Cloud Storage bucket for documents"""
+    client = get_storage_client()
+    if not client:
+        return None
+
+    project_id = os.environ.get('GOOGLE_CLOUD_PROJECT', 'estateally-ai-services')
+    bucket_name = f"{project_id}-documents"
+
+    try:
+        bucket = client.bucket(bucket_name)
+        # Check if bucket exists, create if not
+        if not bucket.exists():
+            logger.info(f"Creating storage bucket: {bucket_name}")
+            bucket = client.create_bucket(bucket_name, location='us-east1')
+            logger.info(f"Bucket created: {bucket_name}")
+        return bucket
+    except Exception as e:
+        logger.error(f"Failed to get/create bucket: {e}")
         return None
 
 def firestore_add_inventory_item(item):
@@ -640,7 +683,14 @@ def enforce_authentication():
 # Main routes
 @app.route('/')
 def index():
-    return render_template('index.html')
+    """
+    Main route - shows landing page for non-authenticated users,
+    dashboard for authenticated users
+    """
+    if is_authenticated():
+        return render_template('index.html')
+    else:
+        return render_template('landing.html')
 
 # Debug endpoint protection - only enable in development
 def is_debug_mode():
@@ -804,6 +854,7 @@ def family_view():
 
 # API Routes for main application
 @app.route('/api/items', methods=['GET'])
+@require_auth
 def get_items():
     """Get all inventory items for the current estate"""
     try:
@@ -823,8 +874,17 @@ def get_items():
         try:
             items = firestore_list_inventory_items()
             if items is not None:
-                # Filter by estate_id
-                items = [item for item in items if item.get('estate_id') == estate_id]
+                # Filter by estate_id - ALSO include items with no estate (orphaned mobile uploads)
+                items = [item for item in items if item.get('estate_id') == estate_id or item.get('estate_id') is None]
+
+                # Auto-assign orphaned items to current estate
+                for item in items:
+                    if item.get('estate_id') is None:
+                        logger.info(f"Auto-assigning orphaned item {item.get('id')} to estate {estate_id}")
+                        item['estate_id'] = estate_id
+                        # Update in Firestore
+                        firestore_update_inventory_item(item.get('id'), {'estate_id': estate_id})
+
                 logger.info(f"Found {len(items)} items from Firestore for estate {estate_id}")
                 return jsonify({
                     'success': True,
@@ -835,8 +895,16 @@ def get_items():
         
         # Check in-memory storage first (since it's the most current)
         in_memory_items = list(inventory_storage.values())
-        # Filter by estate_id
-        in_memory_items = [item for item in in_memory_items if item.get('estate_id') == estate_id]
+        # Filter by estate_id - ALSO include orphaned items
+        in_memory_items = [item for item in in_memory_items if item.get('estate_id') == estate_id or item.get('estate_id') is None]
+
+        # Auto-assign orphaned items to current estate
+        for item in in_memory_items:
+            if item.get('estate_id') is None:
+                logger.info(f"Auto-assigning orphaned item {item.get('id')} to estate {estate_id}")
+                item['estate_id'] = estate_id
+                inventory_storage[item.get('id')] = item  # Update in-memory
+
         logger.info(f"In-memory storage has {len(in_memory_items)} items for estate {estate_id}")
         
         # Fall back to JSON file storage if in-memory is empty
@@ -844,8 +912,19 @@ def get_items():
             try:
                 fresh_storage = load_storage('inventory.json')
                 items = list(fresh_storage.values())
-                # Filter by estate_id
-                items = [item for item in items if item.get('estate_id') == estate_id]
+                # Filter by estate_id - ALSO include orphaned items
+                items = [item for item in items if item.get('estate_id') == estate_id or item.get('estate_id') is None]
+
+                # Auto-assign orphaned items to current estate
+                for item in items:
+                    if item.get('estate_id') is None:
+                        logger.info(f"Auto-assigning orphaned item {item.get('id')} to estate {estate_id}")
+                        item['estate_id'] = estate_id
+                        fresh_storage[item.get('id')] = item
+
+                # Save updated storage
+                if any(item.get('estate_id') == estate_id for item in items if item.get('uploadSource') == 'mobile'):
+                    save_storage('inventory.json', fresh_storage)
                 
                 # Fix any items with broken image URLs and use base64 data when available
                 for item in items:
@@ -891,6 +970,7 @@ def get_items():
         return jsonify({'success': False, 'error': f'Failed to fetch items: {str(e)}'}), 500
 
 @app.route('/api/items', methods=['POST'])
+@require_auth
 def add_item():
     """Add a new inventory item to the current estate"""
     try:
@@ -960,6 +1040,7 @@ def add_item():
         }), 500
 
 @app.route('/api/items/<item_id>', methods=['PUT'])
+@require_auth
 def update_item(item_id):
     """Update an existing inventory item"""
     try:
@@ -1029,6 +1110,7 @@ def update_item(item_id):
         }), 500
 
 @app.route('/api/items/<item_id>', methods=['DELETE'])
+@require_auth
 def delete_item(item_id):
     """Delete an inventory item"""
     try:
@@ -1161,6 +1243,7 @@ Format your response as JSON with these fields:
         return None
 
 @app.route('/api/pricing/lookup', methods=['POST'])
+@require_auth
 def pricing_lookup():
     """AI-powered pricing lookup across multiple platforms"""
     try:
@@ -1370,6 +1453,7 @@ def pricing_lookup():
         }), 500
 
 @app.route('/api/pricing/history/<item_id>')
+@require_auth
 def pricing_history(item_id):
     """Get pricing history for an item"""
     try:
@@ -1409,6 +1493,294 @@ def pricing_history(item_id):
             'success': False,
             'error': 'Failed to get pricing history'
         }), 500
+
+# ============================================================================
+# DOCUMENT MANAGEMENT ENDPOINTS
+# ============================================================================
+
+ALLOWED_DOCUMENT_EXTENSIONS = {'pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'txt'}
+DOCUMENT_CATEGORIES = [
+    'Will',
+    'Trust',
+    'Deed',
+    'Title',
+    'Insurance Policy',
+    'Appraisal',
+    'Receipt',
+    'Warranty',
+    'Certificate',
+    'Tax Document',
+    'Other'
+]
+
+def allowed_document_file(filename):
+    """Check if file extension is allowed for documents"""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_DOCUMENT_EXTENSIONS
+
+@app.route('/api/documents', methods=['GET'])
+@require_auth
+def get_documents():
+    """Get all documents for the authenticated user's estate"""
+    try:
+        user_id = session.get('user_id')
+        estate_id = session.get('current_estate_id')
+
+        if not estate_id:
+            # Return empty list if no estate selected (happens during initial load)
+            return jsonify({
+                'success': True,
+                'documents': []
+            })
+
+        # Get documents from Firestore
+        documents = storage_service.list_documents('documents')
+
+        # Filter to only this estate's documents
+        estate_documents = [
+            doc for doc in documents
+            if doc.get('estate_id') == estate_id
+        ]
+
+        return jsonify({
+            'success': True,
+            'documents': estate_documents
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting documents: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to get documents'
+        }), 500
+
+@app.route('/api/documents/upload', methods=['POST'])
+@require_auth
+def upload_document():
+    """Upload a document to Cloud Storage"""
+    try:
+        user_id = session.get('user_id')
+        estate_id = session.get('current_estate_id')
+
+        if not estate_id:
+            return jsonify({
+                'success': False,
+                'error': 'No estate selected'
+            }), 400
+
+        # Check if file is present
+        if 'file' not in request.files:
+            return jsonify({
+                'success': False,
+                'error': 'No file provided'
+            }), 400
+
+        file = request.files['file']
+
+        if file.filename == '':
+            return jsonify({
+                'success': False,
+                'error': 'No file selected'
+            }), 400
+
+        if not allowed_document_file(file.filename):
+            return jsonify({
+                'success': False,
+                'error': f'File type not allowed. Allowed types: {", ".join(ALLOWED_DOCUMENT_EXTENSIONS)}'
+            }), 400
+
+        # Get document metadata from form
+        category = request.form.get('category', 'Other')
+        description = request.form.get('description', '')
+
+        if category not in DOCUMENT_CATEGORIES:
+            category = 'Other'
+
+        # Generate unique document ID
+        doc_id = str(uuid.uuid4())
+
+        # Secure the filename
+        original_filename = secure_filename(file.filename)
+        file_extension = original_filename.rsplit('.', 1)[1].lower()
+
+        # Create storage path: estate_id/doc_id.extension
+        storage_filename = f"{estate_id}/{doc_id}.{file_extension}"
+
+        # Upload to Cloud Storage
+        bucket = get_storage_bucket()
+        if not bucket:
+            return jsonify({
+                'success': False,
+                'error': 'Storage service unavailable'
+            }), 503
+
+        blob = bucket.blob(storage_filename)
+        blob.upload_from_file(file, content_type=file.content_type)
+
+        # Make the file private (require authentication to download)
+        blob.metadata = {
+            'estate_id': estate_id,
+            'user_id': user_id,
+            'original_filename': original_filename
+        }
+        blob.patch()
+
+        # Save document metadata to Firestore
+        document_data = {
+            'id': doc_id,
+            'estate_id': estate_id,
+            'user_id': user_id,
+            'filename': original_filename,
+            'storage_path': storage_filename,
+            'category': category,
+            'description': description,
+            'file_size': blob.size,
+            'content_type': file.content_type,
+            'uploaded_at': datetime.now().isoformat(),
+            'updated_at': datetime.now().isoformat()
+        }
+
+        storage_service.add_document('documents', doc_id, document_data)
+
+        logger.info(f"Document uploaded: {doc_id} - {original_filename}")
+
+        return jsonify({
+            'success': True,
+            'message': 'Document uploaded successfully',
+            'document': document_data
+        })
+
+    except Exception as e:
+        logger.error(f"Error uploading document: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to upload document'
+        }), 500
+
+@app.route('/api/documents/<doc_id>', methods=['GET'])
+@require_auth
+def download_document(doc_id):
+    """Download a document from Cloud Storage"""
+    try:
+        user_id = session.get('user_id')
+        estate_id = session.get('current_estate_id')
+
+        if not estate_id:
+            return jsonify({
+                'success': False,
+                'error': 'No estate selected'
+            }), 400
+
+        # Get document metadata from Firestore
+        doc_data = storage_service.get_document('documents', doc_id)
+
+        if not doc_data:
+            return jsonify({
+                'success': False,
+                'error': 'Document not found'
+            }), 404
+
+        # Verify document belongs to user's estate
+        if doc_data.get('estate_id') != estate_id:
+            return jsonify({
+                'success': False,
+                'error': 'Access denied'
+            }), 403
+
+        # Get file from Cloud Storage
+        bucket = get_storage_bucket()
+        if not bucket:
+            return jsonify({
+                'success': False,
+                'error': 'Storage service unavailable'
+            }), 503
+
+        blob = bucket.blob(doc_data['storage_path'])
+
+        if not blob.exists():
+            return jsonify({
+                'success': False,
+                'error': 'Document file not found in storage'
+            }), 404
+
+        # Download to bytes
+        file_data = blob.download_as_bytes()
+
+        # Create response with file
+        response = make_response(file_data)
+        response.headers['Content-Type'] = doc_data.get('content_type', 'application/octet-stream')
+        response.headers['Content-Disposition'] = f'attachment; filename="{doc_data["filename"]}"'
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Error downloading document: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to download document'
+        }), 500
+
+@app.route('/api/documents/<doc_id>', methods=['DELETE'])
+@require_auth
+def delete_document(doc_id):
+    """Delete a document"""
+    try:
+        user_id = session.get('user_id')
+        estate_id = session.get('current_estate_id')
+
+        if not estate_id:
+            return jsonify({
+                'success': False,
+                'error': 'No estate selected'
+            }), 400
+
+        # Get document metadata
+        doc_data = storage_service.get_document('documents', doc_id)
+
+        if not doc_data:
+            return jsonify({
+                'success': False,
+                'error': 'Document not found'
+            }), 404
+
+        # Verify document belongs to user's estate
+        if doc_data.get('estate_id') != estate_id:
+            return jsonify({
+                'success': False,
+                'error': 'Access denied'
+            }), 403
+
+        # Delete from Cloud Storage
+        bucket = get_storage_bucket()
+        if bucket:
+            blob = bucket.blob(doc_data['storage_path'])
+            if blob.exists():
+                blob.delete()
+
+        # Delete metadata from Firestore
+        storage_service.delete_document('documents', doc_id)
+
+        logger.info(f"Document deleted: {doc_id}")
+
+        return jsonify({
+            'success': True,
+            'message': 'Document deleted successfully'
+        })
+
+    except Exception as e:
+        logger.error(f"Error deleting document: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to delete document'
+        }), 500
+
+@app.route('/api/documents/categories', methods=['GET'])
+@require_auth
+def get_document_categories():
+    """Get list of available document categories"""
+    return jsonify({
+        'success': True,
+        'categories': DOCUMENT_CATEGORIES
+    })
 
 @app.route('/api/debug/test-auth')
 def debug_test_auth():
@@ -1467,6 +1839,7 @@ def debug_email_status():
         }), 500
 
 @app.route('/api/hero/upload', methods=['POST'])
+@require_auth
 def hero_upload():
     """Handle photo upload and AI analysis"""
     try:
@@ -1514,33 +1887,44 @@ def hero_upload():
         }), 500
 
 @app.route('/api/qr/generate', methods=['POST'])
+@require_auth
 def generate_qr():
     """Generate QR code for mobile upload"""
     try:
         # Generate unique upload session
         session_id = str(uuid.uuid4())
-        
+
+        # Store the current estate_id with this QR session so mobile uploads go to correct estate
+        current_estate_id = get_current_estate_id()
+        if not hasattr(app, 'qr_sessions'):
+            app.qr_sessions = {}
+        app.qr_sessions[session_id] = {
+            'estate_id': current_estate_id,
+            'created_at': datetime.now().isoformat()
+        }
+        logger.info(f"QR session {session_id} created for estate {current_estate_id}")
+
         # Create QR code with upload URL
         upload_url = f"{request.host_url}mobile-upload?session={session_id}"
-        
+
         qr = qrcode.QRCode(version=1, box_size=10, border=5)
         qr.add_data(upload_url)
         qr.make(fit=True)
-        
+
         img = qr.make_image(fill_color="black", back_color="white")
-        
+
         # Convert to base64
         buffer = BytesIO()
         img.save(buffer, format='PNG')
         img_str = base64.b64encode(buffer.getvalue()).decode()
-        
+
         return jsonify({
             'success': True,
             'qr_code': f"data:image/png;base64,{img_str}",
             'upload_url': upload_url,
             'session_id': session_id
         })
-        
+
     except Exception as e:
         logger.error(f"Error generating QR code: {str(e)}")
         return jsonify({
@@ -1609,17 +1993,19 @@ def mobile_upload_api():
         
         # Mock AI analysis (replace with actual AI service)
         try:
-            # Convert uploaded image to base64 for storage
+            # Compress and convert uploaded image to base64 for storage
             photo_data = None
             if file_path and os.path.exists(file_path):
                 try:
-                    with open(file_path, 'rb') as img_file:
-                        import base64
-                        photo_data = base64.b64encode(img_file.read()).decode('utf-8')
-                        photo_url = f"data:image/jpeg;base64,{photo_data}"
-                    logger.info(f"Image converted to base64, size: {len(photo_data)} chars")
+                    # Compress image to meet Firestore size limits (max 800KB)
+                    logger.info(f"Compressing image from: {file_path}")
+                    photo_data = compress_image_to_base64(file_path, max_size_kb=800)
+                    photo_url = f"data:image/jpeg;base64,{photo_data}"
+
+                    size_kb = len(photo_data) / 1024
+                    logger.info(f"Image compressed to base64, size: {size_kb:.2f}KB ({len(photo_data)} chars)")
                 except Exception as img_error:
-                    logger.error(f"Image conversion error: {img_error}")
+                    logger.error(f"Image compression error: {img_error}")
                     photo_url = '/static/placeholder-image.png'
             else:
                 photo_url = '/static/placeholder-image.png'
@@ -1643,11 +2029,16 @@ def mobile_upload_api():
                 'error': f'Failed to process image: {str(ai_error)}'
             }), 500
         
-        # Get current estate ID (from session or create default)
-        estate_id = get_current_estate_id()
-        # If no estate, we'll still create the item but it won't be associated with an estate
-        # In production, you might want to require an estate
-        
+        # Get estate ID from QR session (stored when QR code was generated)
+        estate_id = None
+        if hasattr(app, 'qr_sessions') and session_id in app.qr_sessions:
+            estate_id = app.qr_sessions[session_id].get('estate_id')
+            logger.info(f"Using estate_id {estate_id} from QR session {session_id}")
+        else:
+            # Fallback: try to get from current session
+            estate_id = get_current_estate_id()
+            logger.warning(f"QR session {session_id} not found, using current estate_id: {estate_id}")
+
         # Add the item to inventory storage (like regular upload)
         try:
             item_id = str(uuid.uuid4())
@@ -1680,11 +2071,28 @@ def mobile_upload_api():
             # Try Firestore first
             firestore_success = False
             try:
-                firestore_success = firestore_add_inventory_item(item)
+                # Check photo size before saving to Firestore (1MB limit)
+                # Note: Images should already be compressed to ~800KB, but check as safety net
+                photo_data_size = len(item.get('photo_data', '')) if item.get('photo_data') else 0
+                logger.info(f"Item photo_data size: {photo_data_size} bytes ({photo_data_size / 1024:.2f} KB)")
+
+                if photo_data_size > 900000:  # 900KB safety margin
+                    logger.warning(f"Photo still too large for Firestore after compression ({photo_data_size / 1024:.2f} KB), saving without photo_data")
+                    # Create a copy without the large photo_data field
+                    item_for_firestore = {k: v for k, v in item.items() if k != 'photo_data'}
+                    firestore_success = firestore_add_inventory_item(item_for_firestore)
+                else:
+                    logger.info(f"Photo size OK for Firestore ({photo_data_size / 1024:.2f} KB), saving with photo_data")
+                    firestore_success = firestore_add_inventory_item(item)
+
                 if firestore_success:
                     logger.info(f"Item saved to Firestore: {item_id}")
+                else:
+                    logger.error(f"firestore_add_inventory_item returned False for item {item_id}")
             except Exception as firestore_error:
-                logger.warning(f"Firestore save failed: {firestore_error}")
+                logger.error(f"Firestore save failed with exception: {firestore_error}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
             
             # Always save to JSON file as backup
             inventory_storage[item_id] = item
@@ -1766,6 +2174,12 @@ def invite_family_member():
         data = request.get_json()
         email = data.get('email', '').strip().lower()
         name = data.get('name', '').strip()
+        role = data.get('role', 'heir')  # executor, heir, viewer
+
+        # Validate role
+        valid_roles = ['executor', 'heir', 'viewer']
+        if role not in valid_roles:
+            role = 'heir'  # Default to heir if invalid
 
         if not email or not name:
             return jsonify({
@@ -1793,6 +2207,7 @@ def invite_family_member():
         estate_data['members'][member_code] = {
             'email': email,
             'name': name,
+            'role': role,
             'status': 'invited',
             'invited_at': datetime.now().isoformat(),
             'last_active': None
@@ -1829,6 +2244,43 @@ def invite_family_member():
             'error': 'Failed to invite family member'
         }), 500
 
+# ============================================================================
+# FAMILY ROLES & PERMISSIONS
+# ============================================================================
+
+def get_user_role_in_estate(user_id, estate_id):
+    """Get the user's role in an estate (owner, executor, heir, viewer)"""
+    try:
+        # Check if user is the estate owner
+        estates = storage_service.list_documents('estates')
+        for estate in estates:
+            if estate.get('id') == estate_id and estate.get('user_id') == user_id:
+                return 'owner'  # Estate owner has full control
+
+        # Check family member role
+        estate_data = get_family_estate_data(estate_id)
+        for member_code, member in estate_data['members'].items():
+            if member.get('email') == session.get('user_email'):
+                return member.get('role', 'viewer')
+
+        return None  # Not a member of this estate
+    except Exception as e:
+        logger.error(f"Error getting user role: {e}")
+        return None
+
+def check_permission(user_id, estate_id, required_permission):
+    """Check if user has required permission for an action"""
+    role = get_user_role_in_estate(user_id, estate_id)
+
+    permissions = {
+        'owner': ['view', 'edit', 'delete', 'manage_members', 'manage_roles'],
+        'executor': ['view', 'edit', 'manage_members'],
+        'heir': ['view', 'mark_wants'],
+        'viewer': ['view']
+    }
+
+    return role and required_permission in permissions.get(role, [])
+
 @app.route('/api/family/members', methods=['GET'])
 @require_auth
 def get_family_members():
@@ -1846,6 +2298,7 @@ def get_family_members():
                 'code': member_code,
                 'name': member['name'],
                 'email': member['email'],
+                'role': member.get('role', 'heir'),  # Default to heir for existing members
                 'status': member['status'],
                 'invited_at': member['invited_at'],
                 'last_active': member['last_active']
@@ -1863,6 +2316,68 @@ def get_family_members():
         return jsonify({
             'success': False,
             'error': 'Failed to get family members'
+        }), 500
+
+@app.route('/api/family/members/<member_code>/role', methods=['PUT'])
+@require_auth
+def update_member_role(member_code):
+    """Update a family member's role"""
+    try:
+        user_id = session.get('user_id')
+        estate_id = get_current_estate_id()
+
+        if not estate_id:
+            return jsonify({'success': False, 'error': 'No estate selected'}), 400
+
+        # Check if user has permission to manage roles (only owner and executors)
+        if not check_permission(user_id, estate_id, 'manage_roles') and \
+           not check_permission(user_id, estate_id, 'manage_members'):
+            return jsonify({
+                'success': False,
+                'error': 'You do not have permission to manage roles'
+            }), 403
+
+        data = request.get_json()
+        new_role = data.get('role', '').lower()
+
+        # Validate role
+        valid_roles = ['executor', 'heir', 'viewer']
+        if new_role not in valid_roles:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid role. Must be one of: {", ".join(valid_roles)}'
+            }), 400
+
+        estate_data = get_family_estate_data(estate_id)
+
+        # Check if member exists
+        if member_code not in estate_data['members']:
+            return jsonify({
+                'success': False,
+                'error': 'Family member not found'
+            }), 404
+
+        # Update role
+        estate_data['members'][member_code]['role'] = new_role
+
+        # Save changes
+        save_family_storage()
+
+        return jsonify({
+            'success': True,
+            'message': f'Role updated to {new_role}',
+            'member': {
+                'code': member_code,
+                'name': estate_data['members'][member_code]['name'],
+                'role': new_role
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Error updating member role: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to update role'
         }), 500
 
 @app.route('/api/family/want-item/<share_id>', methods=['POST'])
@@ -2109,18 +2624,23 @@ def check_email():
     try:
         data = request.get_json()
         email = data.get('email', '').lower().strip()
-        
+
         if not email:
             return jsonify({'success': False, 'error': 'Email is required'}), 400
-        
-        # Check if user exists
-        exists = any(user.get('email') == email for user in auth_storage['users'].values())
-        
+
+        # Check if user exists (Firestore or JSON)
+        exists = False
+        if USE_FIRESTORE:
+            user = firestore_get_user_by_email(email)
+            exists = user is not None
+        else:
+            exists = any(user.get('email') == email for user in auth_storage['users'].values())
+
         return jsonify({
             'success': True,
             'exists': exists
         })
-        
+
     except Exception as e:
         logger.error(f"Error checking email: {str(e)}")
         return jsonify({'success': False, 'error': 'Email check failed'}), 500
@@ -2144,12 +2664,17 @@ def verify_mfa():
         # Get session data
         if session_id not in auth_storage.get('mfa_sessions', {}):
             return jsonify({'success': False, 'error': 'Invalid or expired session'}), 401
-        
+
         mfa_session = auth_storage['mfa_sessions'][session_id]
         user_id = mfa_session.get('user_id')
-        
-        # Get user
-        user = auth_storage['users'].get(user_id)
+
+        # Get user (Firestore or JSON)
+        user = None
+        if USE_FIRESTORE:
+            user = firestore_get_user(user_id)
+        else:
+            user = auth_storage['users'].get(user_id)
+
         if not user:
             return jsonify({'success': False, 'error': 'User not found'}), 401
         
@@ -3596,6 +4121,244 @@ def generate_assignment_report_api():
         return jsonify({
             'success': False,
             'error': 'Failed to generate assignment report'
+        }), 500
+
+# ============================================================================
+# EXPORT ENDPOINTS (CSV, Excel, PDF Inventory Report)
+# ============================================================================
+
+@app.route('/api/export/inventory/csv', methods=['GET'])
+@require_auth
+def export_inventory_csv():
+    """Export inventory to CSV format"""
+    try:
+        estate_id = get_current_estate_id()
+        if not estate_id:
+            return jsonify({'success': False, 'error': 'No estate selected'}), 400
+
+        # Get inventory items
+        items = firestore_list_inventory_items()
+        if items is None:
+            items = []
+
+        # Filter by estate
+        items = [item for item in items if item.get('estate_id') == estate_id]
+
+        if not items:
+            return jsonify({
+                'success': False,
+                'error': 'No inventory items to export'
+            }), 400
+
+        # Create CSV
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        # Write header
+        writer.writerow([
+            'Item Name',
+            'Category',
+            'Description',
+            'Estimated Value',
+            'For Sale',
+            'Sale Price',
+            'Condition',
+            'Location',
+            'Assigned To',
+            'Status',
+            'Date Added'
+        ])
+
+        # Write data
+        for item in items:
+            writer.writerow([
+                item.get('name', ''),
+                item.get('category', ''),
+                item.get('description', ''),
+                f"${item.get('estimated_value', 0):.2f}",
+                'Yes' if item.get('for_sale') else 'No',
+                f"${item.get('sale_price', 0):.2f}" if item.get('for_sale') else '',
+                item.get('condition', ''),
+                item.get('location', ''),
+                item.get('assigned_to', ''),
+                item.get('status', 'active'),
+                item.get('dateAdded', '')
+            ])
+
+        # Create response
+        csv_data = output.getvalue()
+        output.close()
+
+        response = make_response(csv_data)
+        response.headers['Content-Type'] = 'text/csv'
+        response.headers['Content-Disposition'] = f'attachment; filename=inventory_{datetime.now().strftime("%Y%m%d")}.csv'
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Error exporting CSV: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to export inventory'
+        }), 500
+
+@app.route('/api/export/inventory/pdf', methods=['GET'])
+@require_auth
+def export_inventory_pdf():
+    """Export complete inventory to PDF"""
+    try:
+        estate_id = get_current_estate_id()
+        if not estate_id:
+            return jsonify({'success': False, 'error': 'No estate selected'}), 400
+
+        # Get inventory items
+        items = firestore_list_inventory_items()
+        if items is None:
+            items = []
+
+        # Filter by estate
+        items = [item for item in items if item.get('estate_id') == estate_id]
+
+        if not items:
+            return jsonify({
+                'success': False,
+                'error': 'No inventory items to export'
+            }), 400
+
+        # Create PDF
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18)
+
+        # Styles
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=24,
+            textColor=colors.HexColor('#4F46E5'),
+            spaceAfter=30,
+            alignment=1  # Center
+        )
+
+        # Build PDF content
+        story = []
+
+        # Title
+        story.append(Paragraph("Estate Inventory Report", title_style))
+        story.append(Spacer(1, 0.3*inch))
+
+        # Summary
+        total_value = sum(item.get('estimated_value', 0) for item in items)
+        story.append(Paragraph(f"<b>Total Items:</b> {len(items)}", styles['Normal']))
+        story.append(Paragraph(f"<b>Total Value:</b> ${total_value:,.2f}", styles['Normal']))
+        story.append(Paragraph(f"<b>Generated:</b> {datetime.now().strftime('%B %d, %Y at %I:%M %p')}", styles['Normal']))
+        story.append(Spacer(1, 0.5*inch))
+
+        # Table data
+        table_data = [['Item', 'Category', 'Value', 'Status']]
+
+        for item in items:
+            table_data.append([
+                Paragraph(item.get('name', '')[:40], styles['Normal']),
+                item.get('category', ''),
+                f"${item.get('estimated_value', 0):,.2f}",
+                item.get('status', 'active').title()
+            ])
+
+        # Create table
+        table = Table(table_data, colWidths=[3*inch, 1.5*inch, 1*inch, 1*inch])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4F46E5')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F9FAFB')])
+        ]))
+
+        story.append(table)
+
+        # Build PDF
+        doc.build(story)
+
+        pdf_data = buffer.getvalue()
+        buffer.close()
+
+        response = make_response(pdf_data)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename=inventory_{datetime.now().strftime("%Y%m%d")}.pdf'
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Error exporting PDF: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to export inventory'
+        }), 500
+
+@app.route('/api/export/documents/csv', methods=['GET'])
+@require_auth
+def export_documents_csv():
+    """Export documents list to CSV format"""
+    try:
+        estate_id = get_current_estate_id()
+        if not estate_id:
+            return jsonify({'success': False, 'error': 'No estate selected'}), 400
+
+        # Get documents
+        documents = storage_service.list_documents('documents')
+        documents = [doc for doc in documents if doc.get('estate_id') == estate_id]
+
+        if not documents:
+            return jsonify({
+                'success': False,
+                'error': 'No documents to export'
+            }), 400
+
+        # Create CSV
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        # Write header
+        writer.writerow([
+            'Filename',
+            'Category',
+            'Description',
+            'File Size',
+            'Upload Date'
+        ])
+
+        # Write data
+        for doc in documents:
+            file_size_mb = doc.get('file_size', 0) / (1024 * 1024)
+            writer.writerow([
+                doc.get('filename', ''),
+                doc.get('category', ''),
+                doc.get('description', ''),
+                f"{file_size_mb:.2f} MB",
+                doc.get('uploaded_at', '')
+            ])
+
+        csv_data = output.getvalue()
+        output.close()
+
+        response = make_response(csv_data)
+        response.headers['Content-Type'] = 'text/csv'
+        response.headers['Content-Disposition'] = f'attachment; filename=documents_{datetime.now().strftime("%Y%m%d")}.csv'
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Error exporting documents CSV: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to export documents'
         }), 500
 
 @app.route('/api/items/<item_id>/dispose', methods=['POST'])

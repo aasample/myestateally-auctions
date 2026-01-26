@@ -256,6 +256,24 @@
                 <div class="section-header">
                     <h2><i class="fas fa-boxes"></i> Inventory Management</h2>
                     <div class="header-buttons">
+                        <div class="dropdown">
+                            <button class="btn secondary dropdown-toggle" onclick="app.toggleExportMenu(event)">
+                                <i class="fas fa-download"></i>
+                                Export
+                                <i class="fas fa-chevron-down"></i>
+                            </button>
+                            <div class="dropdown-menu" id="export-menu">
+                                <a href="#" onclick="app.exportInventoryPDF(); return false;">
+                                    <i class="fas fa-file-pdf"></i> Export as PDF
+                                </a>
+                                <a href="#" onclick="app.exportInventoryCSV(); return false;">
+                                    <i class="fas fa-file-csv"></i> Export as CSV
+                                </a>
+                                <a href="#" onclick="app.printInventory(); return false;">
+                                    <i class="fas fa-print"></i> Print Inventory
+                                </a>
+                            </div>
+                        </div>
                         <button class="btn secondary" id="refresh-inventory">
                             <i class="fas fa-sync"></i>
                             Refresh
@@ -268,26 +286,108 @@
                 </div>
                 
                 <div class="inventory-filters">
-                    <select id="category-filter">
-                        <option value="">All Categories</option>
-                        <option value="furniture">Furniture</option>
-                        <option value="jewelry">Jewelry</option>
-                        <option value="electronics">Electronics</option>
-                        <option value="art">Art & Collectibles</option>
-                        <option value="books">Books</option>
-                        <option value="clothing">Clothing</option>
-                        <option value="other">Other</option>
-                    </select>
-                    
-                    <select id="sort-filter">
-                        <option value="name">Sort by Name</option>
-                        <option value="value-high">Highest Value</option>
-                        <option value="value-low">Lowest Value</option>
-                        <option value="date-new">Newest First</option>
-                        <option value="date-old">Oldest First</option>
-                    </select>
+                    <div class="filter-left">
+                        <button class="btn secondary" onclick="app.selectAllItems()">
+                            <i class="fas fa-check-square"></i>
+                            Select All
+                        </button>
+
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="search-input" placeholder="Search items..." onkeyup="app.filterInventory()">
+                        </div>
+
+                        <select id="category-filter" onchange="app.filterInventory()">
+                            <option value="">All Categories</option>
+                            <option value="Furniture">Furniture</option>
+                            <option value="Jewelry">Jewelry</option>
+                            <option value="Electronics">Electronics</option>
+                            <option value="Art">Art & Collectibles</option>
+                            <option value="Books">Books</option>
+                            <option value="Clothing">Clothing</option>
+                            <option value="Other">Other</option>
+                        </select>
+
+                        <select id="for-sale-filter" onchange="app.filterInventory()">
+                            <option value="">All Items</option>
+                            <option value="true">For Sale Only</option>
+                            <option value="false">Not For Sale</option>
+                        </select>
+
+                        <div class="value-range-filter">
+                            <input type="number" id="min-value" placeholder="Min $" min="0" onchange="app.filterInventory()">
+                            <span>-</span>
+                            <input type="number" id="max-value" placeholder="Max $" min="0" onchange="app.filterInventory()">
+                        </div>
+                    </div>
+
+                    <div class="filter-right">
+                        <select id="sort-filter" onchange="app.filterInventory()">
+                            <option value="name">Sort by Name</option>
+                            <option value="value-high">Highest Value</option>
+                            <option value="value-low">Lowest Value</option>
+                            <option value="date-new">Newest First</option>
+                            <option value="date-old">Oldest First</option>
+                        </select>
+
+                        <button class="btn secondary" onclick="app.clearFilters()">
+                            <i class="fas fa-times"></i>
+                            Clear Filters
+                        </button>
+                    </div>
                 </div>
-                
+
+                <!-- Bulk Actions Toolbar -->
+                <div id="bulk-actions-toolbar" class="bulk-actions-toolbar" style="display: none;">
+                    <div class="bulk-actions-info">
+                        <i class="fas fa-check-circle"></i>
+                        <span><strong id="selected-count">0</strong> items selected</span>
+                    </div>
+                    <div class="bulk-actions-buttons">
+                        <div class="bulk-edit-dropdown">
+                            <button class="btn secondary" onclick="app.showBulkEditMenu()">
+                                <i class="fas fa-edit"></i> Bulk Edit
+                            </button>
+                            <div id="bulk-edit-menu" class="bulk-edit-menu" style="display: none;">
+                                <div class="bulk-edit-section">
+                                    <label>Change Category:</label>
+                                    <select id="bulk-category-select">
+                                        <option value="">Select category...</option>
+                                        <option value="Furniture">Furniture</option>
+                                        <option value="Jewelry">Jewelry</option>
+                                        <option value="Electronics">Electronics</option>
+                                        <option value="Art">Art & Collectibles</option>
+                                        <option value="Books">Books</option>
+                                        <option value="Clothing">Clothing</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                    <button class="btn small primary" onclick="app.applyBulkCategory()">Apply</button>
+                                </div>
+                                <div class="bulk-edit-section">
+                                    <label>Mark For Sale:</label>
+                                    <select id="bulk-for-sale-select">
+                                        <option value="">Select...</option>
+                                        <option value="true">Yes</option>
+                                        <option value="false">No</option>
+                                    </select>
+                                    <button class="btn small primary" onclick="app.applyBulkForSale()">Apply</button>
+                                </div>
+                                <div class="bulk-edit-section">
+                                    <label>Assign To:</label>
+                                    <select id="bulk-assign-select">
+                                        <option value="">Select family member...</option>
+                                        <!-- Will be populated dynamically -->
+                                    </select>
+                                    <button class="btn small primary" onclick="app.applyBulkAssign()">Apply</button>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="btn danger" onclick="app.bulkDelete()">
+                            <i class="fas fa-trash"></i> Delete Selected
+                        </button>
+                    </div>
+                </div>
+
                 <div class="inventory-grid" id="inventory-grid">
                     <!-- Items will be populated by JavaScript -->
                 </div>
@@ -628,19 +728,48 @@
             <section id="documents" class="section">
                 <div class="section-header">
                     <h2><i class="fas fa-file-alt"></i> Documents & Records</h2>
+                    <div class="header-buttons">
+                        <button class="btn secondary" onclick="app.exportDocumentsCSV()">
+                            <i class="fas fa-file-csv"></i> Export List
+                        </button>
+                        <button class="btn primary" onclick="app.showUploadDocumentModal()">
+                            <i class="fas fa-upload"></i> Upload Document
+                        </button>
+                    </div>
                 </div>
-                
-                <div class="documents-info">
-                    <div class="info-card">
-                        <h3><i class="fas fa-receipt"></i> Document Management</h3>
-                        <p>Store and organize important documents related to your estate items:</p>
-                        <ul>
-                            <li>Purchase receipts and invoices</li>
-                            <li>Warranty information and manuals</li>
-                            <li>Appraisal certificates</li>
-                            <li>Insurance documentation</li>
-                            <li>Ownership certificates and titles</li>
-                        </ul>
+
+                <!-- Document Filters -->
+                <div class="document-filters">
+                    <select id="document-category-filter" onchange="app.filterDocuments()">
+                        <option value="">All Categories</option>
+                        <option value="Will">Will</option>
+                        <option value="Trust">Trust</option>
+                        <option value="Deed">Deed</option>
+                        <option value="Title">Title</option>
+                        <option value="Insurance Policy">Insurance Policy</option>
+                        <option value="Appraisal">Appraisal</option>
+                        <option value="Receipt">Receipt</option>
+                        <option value="Warranty">Warranty</option>
+                        <option value="Certificate">Certificate</option>
+                        <option value="Tax Document">Tax Document</option>
+                        <option value="Other">Other</option>
+                    </select>
+
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="document-search" placeholder="Search documents..." onkeyup="app.filterDocuments()">
+                    </div>
+                </div>
+
+                <!-- Documents List -->
+                <div id="documents-list" class="documents-list">
+                    <div class="empty-state">
+                        <i class="fas fa-folder-open"></i>
+                        <p>No documents yet</p>
+                        <p class="empty-state-subtitle">Upload legal documents, receipts, appraisals, and more</p>
+                        <button class="btn primary" onclick="app.showUploadDocumentModal()">
+                            <i class="fas fa-upload"></i> Upload First Document
+                        </button>
                     </div>
                 </div>
             </section>
@@ -668,7 +797,61 @@
     </main>
 
     <!-- Modals -->
-    
+
+    <!-- Upload Document Modal -->
+    <div id="upload-document-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-upload"></i> Upload Document</h3>
+                <button class="modal-close" onclick="app.closeModal('upload-document-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="upload-document-form" onsubmit="app.uploadDocument(event)">
+                    <div class="form-group">
+                        <label for="document-file">
+                            <i class="fas fa-file"></i> Select Document File *
+                        </label>
+                        <input type="file" id="document-file" name="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt" required>
+                        <small>Allowed: PDF, DOC, DOCX, JPG, PNG, TXT (Max 16MB)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="document-category">
+                            <i class="fas fa-tag"></i> Category *
+                        </label>
+                        <select id="document-category" name="category" required>
+                            <option value="Will">Will</option>
+                            <option value="Trust">Trust</option>
+                            <option value="Deed">Deed</option>
+                            <option value="Title">Title</option>
+                            <option value="Insurance Policy">Insurance Policy</option>
+                            <option value="Appraisal">Appraisal</option>
+                            <option value="Receipt">Receipt</option>
+                            <option value="Warranty">Warranty</option>
+                            <option value="Certificate">Certificate</option>
+                            <option value="Tax Document">Tax Document</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="document-description">
+                            <i class="fas fa-align-left"></i> Description (Optional)
+                        </label>
+                        <textarea id="document-description" name="description" rows="3" placeholder="Add notes about this document..."></textarea>
+                    </div>
+
+                    <div class="modal-actions">
+                        <button type="button" class="btn secondary" onclick="app.closeModal('upload-document-modal')">Cancel</button>
+                        <button type="submit" class="btn primary">
+                            <i class="fas fa-upload"></i> Upload Document
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- QR Code Modal -->
     <div id="qr-modal" class="modal">
         <div class="modal-content">
@@ -686,19 +869,19 @@
                     </div>
                 </div>
                 <div class="qr-instructions">
-                    <h4 style="color: #7c3aed !important;">📱 How to Upload from Your Phone:</h4>
-                    <ol>
-                        <li style="color: #6366f1 !important;">Open your phone's camera app</li>
-                        <li style="color: #6366f1 !important;">Point camera at the QR code above</li>
-                        <li style="color: #6366f1 !important;">Tap the notification to open the upload page</li>
-                        <li style="color: #6366f1 !important;">Take or select a photo to upload</li>
+                    <h4 class="qr-instructions-title">📱 How to Upload from Your Phone:</h4>
+                    <ol class="qr-steps-list">
+                        <li>Open your phone's camera app</li>
+                        <li>Point camera at the QR code above</li>
+                        <li>Tap the notification to open the upload page</li>
+                        <li>Take or select a photo to upload</li>
                     </ol>
                     <div class="mobile-qr-instructions">
                         <p><strong>Tips for iOS users:</strong></p>
-                        <ul>
-                            <li style="color: #a78bfa !important;">Make sure your camera app has QR code scanning enabled</li>
-                            <li style="color: #a78bfa !important;">Try taking a new photo with your camera if upload fails</li>
-                            <li style="color: #a78bfa !important;">HEIC photos are automatically converted</li>
+                        <ul class="qr-tips-list">
+                            <li>Make sure your camera app has QR code scanning enabled</li>
+                            <li>Try taking a new photo with your camera if upload fails</li>
+                            <li>HEIC photos are automatically converted</li>
                         </ul>
                     </div>
                 </div>
@@ -802,6 +985,58 @@
                     <div class="modal-actions">
                         <button type="button" class="btn secondary" onclick="closeModal('add-task-modal')">Cancel</button>
                         <button type="submit" class="btn primary">Add Task</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Item Modal -->
+    <div id="add-item-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-plus"></i> Add New Item</h3>
+                <button class="close-btn" onclick="closeModal('add-item-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="add-item-form" onsubmit="window.app.handleAddItem(event)">
+                    <div class="form-group">
+                        <label for="item-name">Item Name *</label>
+                        <input type="text" id="item-name" placeholder="e.g., Antique Oak Table" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="item-category">Category *</label>
+                        <select id="item-category" required>
+                            <option value="">Select a category</option>
+                            <option value="Furniture">Furniture</option>
+                            <option value="Jewelry">Jewelry</option>
+                            <option value="Art">Art</option>
+                            <option value="Electronics">Electronics</option>
+                            <option value="Collectibles">Collectibles</option>
+                            <option value="Clothing">Clothing</option>
+                            <option value="Books">Books</option>
+                            <option value="Kitchen">Kitchen</option>
+                            <option value="Tools">Tools</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="item-description">Description</label>
+                        <textarea id="item-description" rows="3" placeholder="Describe the item..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="item-value">Estimated Value ($)</label>
+                        <input type="number" id="item-value" min="0" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="item-for-sale">
+                            For Sale
+                        </label>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn secondary" onclick="closeModal('add-item-modal')">Cancel</button>
+                        <button type="submit" class="btn primary">Add Item</button>
                     </div>
                 </form>
             </div>
@@ -1050,6 +1285,62 @@
     </div>
 
     <!-- Create Estate Modal -->
+    <!-- Welcome Modal (First-time users) -->
+    <div id="welcome-modal" class="modal">
+        <div class="modal-content welcome-modal-content">
+            <div class="modal-body">
+                <div class="welcome-header">
+                    <div class="welcome-icon">
+                        <i class="fas fa-home"></i>
+                    </div>
+                    <h2>Welcome to MyEstateAlly!</h2>
+                    <p class="welcome-subtitle">Your compassionate partner in estate management</p>
+                </div>
+
+                <div class="welcome-mission">
+                    <div class="mission-icon">
+                        <i class="fas fa-heart"></i>
+                    </div>
+                    <h3>Our Mission</h3>
+                    <p>
+                        We understand that managing an estate isn't just about organizing belongings—it's about honoring memories,
+                        preserving legacies, and bringing families together during challenging times.
+                    </p>
+                    <p>
+                        We've created an AI-powered platform that handles the complexity, so you can focus on what truly matters:
+                        your family and your memories.
+                    </p>
+                </div>
+
+                <div class="welcome-values">
+                    <div class="value-item">
+                        <i class="fas fa-heart"></i>
+                        <span>Compassion First</span>
+                    </div>
+                    <div class="value-item">
+                        <i class="fas fa-users"></i>
+                        <span>Family Harmony</span>
+                    </div>
+                    <div class="value-item">
+                        <i class="fas fa-shield-alt"></i>
+                        <span>Trust & Security</span>
+                    </div>
+                    <div class="value-item">
+                        <i class="fas fa-lightbulb"></i>
+                        <span>Innovation</span>
+                    </div>
+                </div>
+
+                <div class="welcome-actions">
+                    <button class="btn primary btn-large" onclick="app.startEstateCreation()">
+                        <i class="fas fa-rocket"></i> Let's Get Started
+                    </button>
+                    <p class="welcome-footer-text">Create your first estate to begin organizing your inventory</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="create-estate-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -1092,6 +1383,15 @@
                     <div class="form-group">
                         <label for="family-member-email">Email</label>
                         <input type="email" id="family-member-email" required placeholder="Enter email address">
+                    </div>
+                    <div class="form-group">
+                        <label for="family-member-role">Role</label>
+                        <select id="family-member-role" required>
+                            <option value="heir">Heir - Can view inventory and mark items as wanted</option>
+                            <option value="executor">Executor - Can view, edit inventory, and manage family members</option>
+                            <option value="viewer">Viewer - Can only view inventory (read-only)</option>
+                        </select>
+                        <small class="form-help">Choose the appropriate access level for this family member</small>
                     </div>
                     <div class="form-actions">
                         <button type="button" class="btn secondary" onclick="closeModal('invite-family-modal')">Cancel</button>

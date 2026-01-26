@@ -19,6 +19,7 @@ class MyEstateAllyApp {
     constructor() {
         this.currentUser = null;
         this.inventory = [];
+        this.documents = [];
         this.familyMembers = [];
         this.sharingSettings = {
             enabled: true,
@@ -26,7 +27,7 @@ class MyEstateAllyApp {
             allow_wanted_tagging: true
         };
         this.currentShareLink = null;
-        
+
         this.init();
     }
 
@@ -42,6 +43,7 @@ class MyEstateAllyApp {
         this.setupEventListeners();
         this.setupHeroUpload();
         this.loadInventory();
+        this.loadDocuments();
         this.loadFamilyData();
         this.updateStats();
         
@@ -100,13 +102,12 @@ class MyEstateAllyApp {
                     await this.switchEstate(data.estates[0].id);
                 }
                 
-                // If no estates exist, prompt to create one
+                // If no estates exist, show welcome modal
                 if (!data.estates || data.estates.length === 0) {
-                    this.showMessage('Welcome! Create your first estate to get started.', 'info');
-                    // Automatically show the create estate modal for first-time users
+                    // Show welcome modal for first-time users
                     setTimeout(() => {
-                        this.showCreateEstateModal();
-                    }, 1000);
+                        this.showWelcomeModal();
+                    }, 500);
                 }
                 
                 return;
@@ -180,7 +181,8 @@ class MyEstateAllyApp {
         // Quick actions
         document.getElementById('add-item-btn')?.addEventListener('click', () => this.switchTab('inventory'));
         document.getElementById("ai-pricing-btn")?.addEventListener("click", () => this.switchTab("ai-pricing"));
-        
+        document.getElementById('add-inventory-item')?.addEventListener('click', () => this.openModal('add-item-modal'));
+
         // AI Pricing functionality
         document.getElementById("lookup-pricing-btn")?.addEventListener("click", () => this.lookupPricing());
         document.getElementById("pricing-item-select")?.addEventListener("change", (e) => this.onInventoryItemSelect(e));
@@ -612,6 +614,9 @@ class MyEstateAllyApp {
 
         const htmlContent = this.inventory.map(item => `
             <div class="inventory-item" data-item-id="${item.id}">
+                <div class="item-checkbox">
+                    <input type="checkbox" class="item-select-checkbox" data-item-id="${item.id}" onchange="app.updateBulkActions()">
+                </div>
                 <div class="item-image">
                     ${item.photo ? `<img src="${item.photo}" alt="${item.name}">` : '<i class="fas fa-image"></i>'}
                 </div>
@@ -639,6 +644,9 @@ class MyEstateAllyApp {
                 </div>
             </div>
         `).join('');
+
+        // Update bulk actions toolbar visibility
+        this.updateBulkActions();
         
         console.log('Generated HTML:', htmlContent);
         grid.innerHTML = htmlContent;
@@ -651,7 +659,7 @@ class MyEstateAllyApp {
     editItem(itemId) {
         const item = this.inventory.find(i => i.id === itemId);
         if (!item) {
-            alert('Item not found');
+            this.showMessage('Item not found', 'error');
             return;
         }
 
@@ -738,15 +746,15 @@ class MyEstateAllyApp {
             const result = await response.json();
             
             if (result.success) {
-                alert('Item updated successfully!');
+                this.showMessage('Item updated successfully!', 'success');
                 this.closeEditModal();
                 this.loadInventory(); // Refresh the inventory
             } else {
-                alert(`Error: ${result.error}`);
+                this.showMessage(`Error: ${result.error}`, 'error');
             }
         } catch (error) {
             console.error('Error saving item:', error);
-            alert('Failed to save item. Please try again.');
+            this.showMessage('Failed to save item. Please try again.', 'error');
         }
     }
 
@@ -783,7 +791,7 @@ class MyEstateAllyApp {
     async deleteItem(itemId) {
         const item = this.inventory.find(i => i.id === itemId);
         if (!item) {
-            alert('Item not found');
+            this.showMessage('Item not found', 'error');
             return;
         }
 
@@ -796,15 +804,64 @@ class MyEstateAllyApp {
                 const result = await response.json();
                 
                 if (result.success) {
-                    alert('Item deleted successfully!');
+                    this.showMessage('Item deleted successfully!', 'success');
                     this.loadInventory(); // Refresh the inventory
                 } else {
-                    alert(`Error: ${result.error}`);
+                    this.showMessage(`Error: ${result.error}`, 'error');
                 }
             } catch (error) {
                 console.error('Error deleting item:', error);
-                alert('Failed to delete item. Please try again.');
+                this.showMessage('Failed to delete item. Please try again.', 'error');
             }
+        }
+    }
+
+    /**
+     * Handle manual item addition
+     */
+    async handleAddItem(event) {
+        event.preventDefault();
+
+        const name = document.getElementById('item-name').value.trim();
+        const category = document.getElementById('item-category').value;
+        const description = document.getElementById('item-description').value.trim();
+        const estimatedValue = parseFloat(document.getElementById('item-value').value) || 0;
+        const forSale = document.getElementById('item-for-sale').checked;
+
+        if (!name || !category) {
+            this.showMessage('Please fill in item name and category', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/items', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    name,
+                    category,
+                    description,
+                    estimatedValue,
+                    forSale,
+                    photo: '/static/placeholder-image.png'  // Placeholder for manual entries
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.showMessage('Item added successfully!', 'success');
+                this.closeModal('add-item-modal');
+                document.getElementById('add-item-form').reset();
+                this.loadInventory(); // Refresh inventory
+            } else {
+                this.showMessage(`Error: ${result.error}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error adding item:', error);
+            this.showMessage('Failed to add item. Please try again.', 'error');
         }
     }
 
@@ -835,7 +892,7 @@ class MyEstateAllyApp {
             // Get the current share ID from family settings
             const shareId = this.sharingSettings?.share_id;
             if (!shareId) {
-                alert('No family sharing link found. Please create a family sharing link first.');
+                this.showMessage('No family sharing link found. Please create a family sharing link first.', 'info');
                 return;
             }
 
@@ -856,7 +913,7 @@ class MyEstateAllyApp {
             }
         } catch (error) {
             console.error('Error loading desire analysis:', error);
-            alert('Failed to load desire analysis. Please try again.');
+            this.showMessage('Failed to load desire analysis. Please try again.', 'error');
         }
     }
 
@@ -969,7 +1026,7 @@ class MyEstateAllyApp {
             // Get item details
             const item = this.inventory.find(i => i.id === itemId);
             if (!item) {
-                alert('Item not found');
+                this.showMessage('Item not found', 'error');
                 return;
             }
 
@@ -984,7 +1041,7 @@ class MyEstateAllyApp {
 
             const analysisItem = result.analysis.find(a => a.item.id === itemId);
             if (!analysisItem) {
-                alert('No desire data found for this item');
+                this.showMessage('No desire data found for this item', 'info');
                 return;
             }
 
@@ -993,7 +1050,7 @@ class MyEstateAllyApp {
             openModal('assignment-modal');
         } catch (error) {
             console.error('Error showing assignment modal:', error);
-            alert('Failed to load assignment data. Please try again.');
+            this.showMessage('Failed to load assignment data. Please try again.', 'error');
         }
     }
 
@@ -1070,7 +1127,7 @@ class MyEstateAllyApp {
         const itemDescription = document.getElementById('pricing-item-description').value.trim();
         
         if (!itemSelect.value && !itemName) {
-            alert('Please select an item from inventory or enter an item name.');
+            this.showMessage('Please select an item from inventory or enter an item name.', 'error');
             return;
         }
         
@@ -1102,7 +1159,7 @@ class MyEstateAllyApp {
             }
         } catch (error) {
             console.error('Pricing lookup error:', error);
-            alert('Failed to lookup pricing. Please try again.');
+            this.showMessage('Failed to lookup pricing. Please try again.', 'error');
         } finally {
             this.hidePricingLoading();
         }
@@ -1302,7 +1359,10 @@ class MyEstateAllyApp {
                 <div class="member-info">
                     <div class="member-header">
                         <h4>${member.name}</h4>
-                        <span class="member-code">${member.code}</span>
+                        <span class="member-role role-${member.role || 'heir'}">
+                            <i class="fas ${this.getRoleIcon(member.role)}"></i>
+                            ${this.getRoleLabel(member.role)}
+                        </span>
                     </div>
                     <p class="member-email">${member.email}</p>
                     <div class="member-status">
@@ -1311,6 +1371,11 @@ class MyEstateAllyApp {
                     </div>
                 </div>
                 <div class="member-actions">
+                    <select class="role-selector" onchange="app.updateMemberRole('${member.code}', this.value)">
+                        <option value="heir" ${(member.role || 'heir') === 'heir' ? 'selected' : ''}>Heir</option>
+                        <option value="executor" ${member.role === 'executor' ? 'selected' : ''}>Executor</option>
+                        <option value="viewer" ${member.role === 'viewer' ? 'selected' : ''}>Viewer</option>
+                    </select>
                     <button class="btn small secondary" onclick="app.removeFamilyMember('${member.code}')">
                         <i class="fas fa-trash"></i>
                         Remove
@@ -1362,6 +1427,7 @@ class MyEstateAllyApp {
     async inviteFamilyMember() {
         const name = document.getElementById('family-member-name').value.trim();
         const email = document.getElementById('family-member-email').value.trim();
+        const role = document.getElementById('family-member-role').value;
 
         if (!name || !email) {
             this.showMessage('Please enter both name and email', 'error');
@@ -1374,7 +1440,7 @@ class MyEstateAllyApp {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ name, email })
+                body: JSON.stringify({ name, email, role })
             });
 
             const result = await response.json();
@@ -1399,11 +1465,25 @@ class MyEstateAllyApp {
                     if (emailResult.success) {
                         this.showMessage(`Family member invited successfully! Invitation email sent to ${email}`, 'success');
                     } else {
-                        this.showMessage(`Family member added but email failed to send: ${emailResult.error}`, 'warning');
+                        // Email failed - show share link to user
+                        const shareLink = result.share_link;
+                        this.showMessage(`Family member added! Share link copied to clipboard. Send it to ${email}`, 'success');
+
+                        // Copy link to clipboard
+                        navigator.clipboard.writeText(shareLink).catch(err => {
+                            console.error('Failed to copy to clipboard:', err);
+                        });
                     }
                 } catch (emailError) {
                     console.error('Email sending error:', emailError);
-                    this.showMessage(`Family member added but email failed to send: ${emailError.message}`, 'warning');
+                    // Show share link to user
+                    const shareLink = result.share_link;
+                    this.showMessage(`Family member added! Share link copied to clipboard. Send it to ${email}`, 'success');
+
+                    // Copy link to clipboard
+                    navigator.clipboard.writeText(shareLink).catch(err => {
+                        console.error('Failed to copy to clipboard:', err);
+                    });
                 }
 
                 this.closeModal('invite-family-modal');
@@ -1719,6 +1799,78 @@ class MyEstateAllyApp {
     }
 
     /**
+     * Show welcome modal (first-time users)
+     */
+    showWelcomeModal() {
+        this.openModal('welcome-modal');
+    }
+
+    /**
+     * Start estate creation from welcome modal
+     */
+    startEstateCreation() {
+        this.closeModal('welcome-modal');
+        setTimeout(() => {
+            this.showCreateEstateModal();
+        }, 300);
+    }
+
+    /**
+     * Get icon for a role
+     */
+    getRoleIcon(role) {
+        const icons = {
+            'owner': 'fa-crown',
+            'executor': 'fa-gavel',
+            'heir': 'fa-user',
+            'viewer': 'fa-eye'
+        };
+        return icons[role] || icons['heir'];
+    }
+
+    /**
+     * Get display label for a role
+     */
+    getRoleLabel(role) {
+        const labels = {
+            'owner': 'Owner',
+            'executor': 'Executor',
+            'heir': 'Heir',
+            'viewer': 'Viewer'
+        };
+        return labels[role] || labels['heir'];
+    }
+
+    /**
+     * Update a family member's role
+     */
+    async updateMemberRole(memberCode, newRole) {
+        try {
+            const response = await fetch(`/api/family/members/${memberCode}/role`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ role: newRole })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                this.showMessage(`Role updated to ${this.getRoleLabel(newRole)}`, 'success');
+                this.loadFamilyMembers();
+            } else {
+                this.showMessage(data.error || 'Failed to update role', 'error');
+                this.loadFamilyMembers();
+            }
+        } catch (error) {
+            console.error('Error updating member role:', error);
+            this.showMessage('Failed to update role', 'error');
+            this.loadFamilyMembers();
+        }
+    }
+
+    /**
      * Show create estate modal
      */
     showCreateEstateModal() {
@@ -1894,7 +2046,7 @@ class MyEstateAllyApp {
             const reason = document.getElementById('assignment-reason').value;
 
             if (!assignedTo) {
-                alert('Please select a family member to assign the item to.');
+                this.showMessage('Please select a family member to assign the item to.', 'error');
                 return;
             }
 
@@ -1914,7 +2066,7 @@ class MyEstateAllyApp {
             const result = await response.json();
 
             if (result.success) {
-                alert('Item assigned successfully!');
+                this.showMessage('Item assigned successfully!', 'success');
                 closeModal('assignment-modal');
                 this.loadInventory(); // Refresh inventory to show assignment
             } else {
@@ -1922,7 +2074,7 @@ class MyEstateAllyApp {
             }
         } catch (error) {
             console.error('Error assigning item:', error);
-            alert('Failed to assign item. Please try again.');
+            this.showMessage('Failed to assign item. Please try again.', 'error');
         }
     }
 
@@ -1998,6 +2150,12 @@ class MyEstateAllyApp {
      * Load estate timeline
      */
     async loadEstateTimeline() {
+        // Skip if not logged in
+        if (!this.currentUser) {
+            console.log('Skipping estate timeline load - user not logged in');
+            return;
+        }
+
         try {
             const response = await fetch('/api/estate/timeline');
             const result = await response.json();
@@ -2009,7 +2167,10 @@ class MyEstateAllyApp {
             }
         } catch (error) {
             console.error('Error loading estate timeline:', error);
-            this.showMessage('Failed to load estate timeline.', 'error');
+            // Only show error if user is logged in
+            if (this.currentUser) {
+                this.showMessage('Failed to load estate timeline.', 'error');
+            }
         }
     }
 
@@ -2051,6 +2212,12 @@ class MyEstateAllyApp {
      * Update disposal stats
      */
     async updateDisposalStats() {
+        // Skip if not logged in
+        if (!this.currentUser) {
+            console.log('Skipping disposal stats update - user not logged in');
+            return;
+        }
+
         try {
             const response = await fetch('/api/estate/disposal-summary');
             const result = await response.json();
@@ -2092,7 +2259,7 @@ class MyEstateAllyApp {
             const priority = document.getElementById('task-priority').value;
 
             if (!task) {
-                alert('Please enter a task description.');
+                this.showMessage('Please enter a task description.', 'error');
                 return;
             }
 
@@ -2136,7 +2303,7 @@ class MyEstateAllyApp {
             const disposalNotes = document.getElementById('disposal-notes').value.trim();
 
             if (!disposalType) {
-                alert('Please select a disposal type.');
+                this.showMessage('Please select a disposal type.', 'error');
                 return;
             }
 
@@ -2212,6 +2379,324 @@ class MyEstateAllyApp {
             console.error('Error updating task status:', error);
             this.showMessage('Failed to update task status.', 'error');
         }
+    }
+
+    /**
+     * Bulk Operations
+     */
+
+    getSelectedItems() {
+        const checkboxes = document.querySelectorAll('.item-select-checkbox:checked');
+        return Array.from(checkboxes).map(cb => cb.dataset.itemId);
+    }
+
+    selectAllItems() {
+        const checkboxes = document.querySelectorAll('.item-select-checkbox');
+        const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+        checkboxes.forEach(cb => cb.checked = !allChecked);
+        this.updateBulkActions();
+    }
+
+    updateBulkActions() {
+        const selectedIds = this.getSelectedItems();
+        const toolbar = document.getElementById('bulk-actions-toolbar');
+        const count = document.getElementById('selected-count');
+
+        if (!toolbar) return;
+
+        if (selectedIds.length > 0) {
+            toolbar.style.display = 'flex';
+            if (count) count.textContent = selectedIds.length;
+        } else {
+            toolbar.style.display = 'none';
+        }
+    }
+
+    async bulkDelete() {
+        const selectedIds = this.getSelectedItems();
+
+        if (selectedIds.length === 0) {
+            this.showMessage('No items selected', 'error');
+            return;
+        }
+
+        if (!confirm(`Delete ${selectedIds.length} selected item(s)? This cannot be undone.`)) {
+            return;
+        }
+
+        this.showLoading(`Deleting ${selectedIds.length} items...`);
+
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const itemId of selectedIds) {
+            try {
+                const response = await fetch(`/api/items/${itemId}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    successCount++;
+                } else {
+                    failCount++;
+                }
+            } catch (error) {
+                console.error(`Error deleting item ${itemId}:`, error);
+                failCount++;
+            }
+        }
+
+        this.hideLoading();
+
+        if (successCount > 0) {
+            this.showMessage(`Deleted ${successCount} item(s)`, 'success');
+            await this.loadInventory();
+        }
+
+        if (failCount > 0) {
+            this.showMessage(`Failed to delete ${failCount} item(s)`, 'error');
+        }
+    }
+
+    async bulkEdit(field, value) {
+        const selectedIds = this.getSelectedItems();
+
+        if (selectedIds.length === 0) {
+            this.showMessage('No items selected', 'error');
+            return;
+        }
+
+        this.showLoading(`Updating ${selectedIds.length} items...`);
+
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const itemId of selectedIds) {
+            try {
+                const item = this.inventory.find(i => i.id === itemId);
+                if (!item) continue;
+
+                const updatedItem = { ...item, [field]: value };
+
+                const response = await fetch(`/api/items/${itemId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(updatedItem)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    successCount++;
+                } else {
+                    failCount++;
+                }
+            } catch (error) {
+                console.error(`Error updating item ${itemId}:`, error);
+                failCount++;
+            }
+        }
+
+        this.hideLoading();
+
+        if (successCount > 0) {
+            this.showMessage(`Updated ${successCount} item(s)`, 'success');
+            await this.loadInventory();
+            this.closeBulkEditMenu();
+        }
+
+        if (failCount > 0) {
+            this.showMessage(`Failed to update ${failCount} item(s)`, 'error');
+        }
+    }
+
+    showBulkEditMenu() {
+        const menu = document.getElementById('bulk-edit-menu');
+        if (menu) {
+            menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+        }
+    }
+
+    closeBulkEditMenu() {
+        const menu = document.getElementById('bulk-edit-menu');
+        if (menu) {
+            menu.style.display = 'none';
+        }
+    }
+
+    async applyBulkCategory() {
+        const category = document.getElementById('bulk-category-select')?.value;
+        if (!category) {
+            this.showMessage('Please select a category', 'error');
+            return;
+        }
+        await this.bulkEdit('category', category);
+    }
+
+    async applyBulkForSale() {
+        const forSale = document.getElementById('bulk-for-sale-select')?.value === 'true';
+        await this.bulkEdit('forSale', forSale);
+    }
+
+    async applyBulkAssign() {
+        const assignTo = document.getElementById('bulk-assign-select')?.value;
+        if (!assignTo) {
+            this.showMessage('Please select a family member', 'error');
+            return;
+        }
+        await this.bulkEdit('assignedTo', assignTo);
+    }
+
+    /**
+     * Search and Filter Functions
+     */
+
+    filterInventory() {
+        if (!this.inventory || this.inventory.length === 0) {
+            return;
+        }
+
+        // Get filter values
+        const searchQuery = document.getElementById('search-input')?.value.toLowerCase() || '';
+        const categoryFilter = document.getElementById('category-filter')?.value || '';
+        const forSaleFilter = document.getElementById('for-sale-filter')?.value || '';
+        const minValue = parseFloat(document.getElementById('min-value')?.value) || 0;
+        const maxValue = parseFloat(document.getElementById('max-value')?.value) || Infinity;
+        const sortFilter = document.getElementById('sort-filter')?.value || 'name';
+
+        // Filter items
+        let filtered = this.inventory.filter(item => {
+            // Search filter (name or description)
+            const matchesSearch = !searchQuery ||
+                (item.name && item.name.toLowerCase().includes(searchQuery)) ||
+                (item.description && item.description.toLowerCase().includes(searchQuery)) ||
+                (item.category && item.category.toLowerCase().includes(searchQuery));
+
+            // Category filter
+            const matchesCategory = !categoryFilter || item.category === categoryFilter;
+
+            // For sale filter
+            const matchesForSale = !forSaleFilter ||
+                (forSaleFilter === 'true' && item.forSale) ||
+                (forSaleFilter === 'false' && !item.forSale);
+
+            // Value range filter
+            const itemValue = parseFloat(item.estimatedValue) || 0;
+            const matchesValue = itemValue >= minValue && itemValue <= maxValue;
+
+            return matchesSearch && matchesCategory && matchesForSale && matchesValue;
+        });
+
+        // Sort items
+        filtered = this.sortItems(filtered, sortFilter);
+
+        // Update display with filtered items
+        this.displayFilteredInventory(filtered);
+    }
+
+    sortItems(items, sortBy) {
+        const sorted = [...items];
+
+        switch(sortBy) {
+            case 'name':
+                sorted.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                break;
+            case 'value-high':
+                sorted.sort((a, b) => (b.estimatedValue || 0) - (a.estimatedValue || 0));
+                break;
+            case 'value-low':
+                sorted.sort((a, b) => (a.estimatedValue || 0) - (b.estimatedValue || 0));
+                break;
+            case 'date-new':
+                sorted.sort((a, b) => new Date(b.dateAdded || 0) - new Date(a.dateAdded || 0));
+                break;
+            case 'date-old':
+                sorted.sort((a, b) => new Date(a.dateAdded || 0) - new Date(b.dateAdded || 0));
+                break;
+        }
+
+        return sorted;
+    }
+
+    displayFilteredInventory(items) {
+        const grid = document.getElementById('inventory-grid');
+        const empty = document.getElementById('inventory-empty');
+
+        if (!grid) return;
+
+        if (items.length === 0) {
+            grid.style.display = 'none';
+            if (empty) {
+                empty.style.display = 'block';
+                empty.querySelector('h3').textContent = 'No items match your filters';
+                empty.querySelector('p').textContent = 'Try adjusting your search or filter criteria';
+            }
+            return;
+        }
+
+        if (empty) empty.style.display = 'none';
+        grid.style.display = 'grid';
+
+        const htmlContent = items.map(item => `
+            <div class="inventory-item" data-item-id="${item.id}">
+                <div class="item-checkbox">
+                    <input type="checkbox" class="item-select-checkbox" data-item-id="${item.id}" onchange="app.updateBulkActions()">
+                </div>
+                <div class="item-image">
+                    ${item.photo ? `<img src="${item.photo}" alt="${item.name}">` : '<i class="fas fa-image"></i>'}
+                </div>
+                <div class="item-info">
+                    <h4>${item.name || 'Unnamed Item'}</h4>
+                    <p class="item-category">${item.category || 'Uncategorized'}</p>
+                    <p class="item-description">${item.description || 'No description'}</p>
+                    <p class="item-value">$${item.estimatedValue || 0}</p>
+                    ${item.forSale ? '<span class="for-sale-badge">For Sale</span>' : ''}
+                    ${item.assignedTo ? `<span class="assigned-badge">Assigned to ${item.assignedTo}</span>` : ''}
+                    <div class="item-actions">
+                        <button class="edit-btn" onclick="app.editItem('${item.id}')">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                        <button class="pricing-btn" onclick="app.lookupItemPricing('${item.id}')">
+                            <i class="fas fa-search-dollar"></i> Price
+                        </button>
+                        <button class="disposal-btn" onclick="app.showDisposalModal('${item.id}')" title="Mark as disposed">
+                            <i class="fas fa-trash-alt"></i> Dispose
+                        </button>
+                        <button class="delete-btn" onclick="app.deleteItem('${item.id}')">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+        grid.innerHTML = htmlContent;
+        this.updateBulkActions();
+    }
+
+    clearFilters() {
+        // Clear all filter inputs
+        const searchInput = document.getElementById('search-input');
+        const categoryFilter = document.getElementById('category-filter');
+        const forSaleFilter = document.getElementById('for-sale-filter');
+        const minValue = document.getElementById('min-value');
+        const maxValue = document.getElementById('max-value');
+        const sortFilter = document.getElementById('sort-filter');
+
+        if (searchInput) searchInput.value = '';
+        if (categoryFilter) categoryFilter.value = '';
+        if (forSaleFilter) forSaleFilter.value = '';
+        if (minValue) minValue.value = '';
+        if (maxValue) maxValue.value = '';
+        if (sortFilter) sortFilter.value = 'name';
+
+        // Reload full inventory
+        this.updateInventoryDisplay();
+        this.showMessage('Filters cleared', 'info');
     }
 }
 
@@ -2642,13 +3127,470 @@ function logout() {
 
 function showUserProfile() {
     // TODO: Implement user profile modal
-    alert('User profile coming soon!');
+    app.showMessage('User profile coming soon!', 'info');
 }
 
 function showAccountSettings() {
     // TODO: Implement account settings modal
-    alert('Account settings coming soon!');
+    app.showMessage('Account settings coming soon!', 'info');
 }
+
+// ============================================================================
+// DOCUMENT MANAGEMENT METHODS
+// ============================================================================
+
+MyEstateAllyApp.prototype.loadDocuments = async function() {
+    try {
+        const response = await fetch('/api/documents');
+        const data = await response.json();
+
+        if (data.success) {
+            this.documents = data.documents;
+            this.displayDocuments();
+        } else {
+            // Silently handle "no estate selected" error (happens during initial load)
+            if (data.error !== 'No estate selected') {
+                console.error('Failed to load documents:', data.error);
+            }
+        }
+    } catch (error) {
+        console.error('Error loading documents:', error);
+    }
+};
+
+MyEstateAllyApp.prototype.displayDocuments = function() {
+    const container = document.getElementById('documents-list');
+    if (!container) return;
+
+    if (this.documents.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-folder-open"></i>
+                <p>No documents yet</p>
+                <p class="empty-state-subtitle">Upload legal documents, receipts, appraisals, and more</p>
+                <button class="btn primary" onclick="app.showUploadDocumentModal()">
+                    <i class="fas fa-upload"></i> Upload First Document
+                </button>
+            </div>
+        `;
+        return;
+    }
+
+    const htmlContent = this.documents.map(doc => {
+        const uploadDate = new Date(doc.uploaded_at).toLocaleDateString();
+        const fileSize = this.formatFileSize(doc.file_size);
+        const icon = this.getDocumentIcon(doc.content_type);
+
+        return `
+            <div class="document-item" data-doc-id="${doc.id}">
+                <div class="document-icon">
+                    <i class="${icon}"></i>
+                </div>
+                <div class="document-info">
+                    <h4>${doc.filename}</h4>
+                    <div class="document-meta">
+                        <span class="document-category">
+                            <i class="fas fa-tag"></i> ${doc.category}
+                        </span>
+                        <span class="document-size">
+                            <i class="fas fa-file"></i> ${fileSize}
+                        </span>
+                        <span class="document-date">
+                            <i class="fas fa-calendar"></i> ${uploadDate}
+                        </span>
+                    </div>
+                    ${doc.description ? `<p class="document-description">${doc.description}</p>` : ''}
+                </div>
+                <div class="document-actions">
+                    <button class="btn-icon" onclick="app.downloadDocument('${doc.id}')" title="Download">
+                        <i class="fas fa-download"></i>
+                    </button>
+                    <button class="btn-icon danger" onclick="app.deleteDocument('${doc.id}')" title="Delete">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    container.innerHTML = htmlContent;
+};
+
+MyEstateAllyApp.prototype.filterDocuments = function() {
+    const categoryFilter = document.getElementById('document-category-filter')?.value || '';
+    const searchQuery = document.getElementById('document-search')?.value.toLowerCase() || '';
+
+    let filtered = this.documents.filter(doc => {
+        const matchesCategory = !categoryFilter || doc.category === categoryFilter;
+        const matchesSearch = !searchQuery ||
+            doc.filename.toLowerCase().includes(searchQuery) ||
+            (doc.description && doc.description.toLowerCase().includes(searchQuery));
+
+        return matchesCategory && matchesSearch;
+    });
+
+    // Temporarily store filtered documents
+    const originalDocs = this.documents;
+    this.documents = filtered;
+    this.displayDocuments();
+    this.documents = originalDocs;
+};
+
+MyEstateAllyApp.prototype.showUploadDocumentModal = function() {
+    const modal = document.getElementById('upload-document-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+        // Reset form
+        document.getElementById('upload-document-form')?.reset();
+    }
+};
+
+MyEstateAllyApp.prototype.uploadDocument = async function(event) {
+    event.preventDefault();
+
+    const form = event.target;
+    const formData = new FormData(form);
+
+    // Show loading
+    this.showLoading('Uploading document...');
+
+    try {
+        const response = await fetch('/api/documents/upload', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            this.showMessage('Document uploaded successfully!', 'success');
+            this.closeModal('upload-document-modal');
+            await this.loadDocuments();
+        } else {
+            this.showMessage(data.error || 'Failed to upload document', 'error');
+        }
+    } catch (error) {
+        console.error('Error uploading document:', error);
+        this.showMessage('Failed to upload document. Please try again.', 'error');
+    } finally {
+        this.hideLoading();
+    }
+};
+
+MyEstateAllyApp.prototype.downloadDocument = async function(docId) {
+    try {
+        this.showLoading('Downloading document...');
+
+        const response = await fetch(`/api/documents/${docId}`);
+
+        if (!response.ok) {
+            const data = await response.json();
+            this.showMessage(data.error || 'Failed to download document', 'error');
+            return;
+        }
+
+        // Get filename from Content-Disposition header
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = 'document';
+
+        if (contentDisposition) {
+            const matches = /filename="([^"]+)"/.exec(contentDisposition);
+            if (matches && matches[1]) {
+                filename = matches[1];
+            }
+        }
+
+        // Download the file
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        this.showMessage('Document downloaded successfully!', 'success');
+    } catch (error) {
+        console.error('Error downloading document:', error);
+        this.showMessage('Failed to download document', 'error');
+    } finally {
+        this.hideLoading();
+    }
+};
+
+MyEstateAllyApp.prototype.deleteDocument = async function(docId) {
+    if (!confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
+        return;
+    }
+
+    try {
+        this.showLoading('Deleting document...');
+
+        const response = await fetch(`/api/documents/${docId}`, {
+            method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            this.showMessage('Document deleted successfully!', 'success');
+            await this.loadDocuments();
+        } else {
+            this.showMessage(data.error || 'Failed to delete document', 'error');
+        }
+    } catch (error) {
+        console.error('Error deleting document:', error);
+        this.showMessage('Failed to delete document', 'error');
+    } finally {
+        this.hideLoading();
+    }
+};
+
+MyEstateAllyApp.prototype.getDocumentIcon = function(contentType) {
+    if (contentType.includes('pdf')) return 'fas fa-file-pdf';
+    if (contentType.includes('word') || contentType.includes('doc')) return 'fas fa-file-word';
+    if (contentType.includes('image')) return 'fas fa-file-image';
+    if (contentType.includes('text')) return 'fas fa-file-alt';
+    return 'fas fa-file';
+};
+
+MyEstateAllyApp.prototype.formatFileSize = function(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+};
+
+// ============================================================================
+// EXPORT & PRINT FUNCTIONS
+// ============================================================================
+
+MyEstateAllyApp.prototype.toggleExportMenu = function(event) {
+    event.stopPropagation();
+    const menu = document.getElementById('export-menu');
+    menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+
+    // Close menu when clicking outside
+    document.addEventListener('click', function closeMenu(e) {
+        if (!menu.contains(e.target)) {
+            menu.style.display = 'none';
+            document.removeEventListener('click', closeMenu);
+        }
+    });
+};
+
+MyEstateAllyApp.prototype.exportInventoryPDF = async function() {
+    try {
+        this.showLoading('Generating PDF...');
+
+        const response = await fetch('/api/export/inventory/pdf');
+
+        if (!response.ok) {
+            const data = await response.json();
+            this.showMessage(data.error || 'Failed to export PDF', 'error');
+            return;
+        }
+
+        // Download the PDF
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `inventory_${new Date().toISOString().split('T')[0]}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        this.showMessage('PDF exported successfully!', 'success');
+    } catch (error) {
+        console.error('Error exporting PDF:', error);
+        this.showMessage('Failed to export PDF', 'error');
+    } finally {
+        this.hideLoading();
+    }
+};
+
+MyEstateAllyApp.prototype.exportInventoryCSV = async function() {
+    try {
+        this.showLoading('Generating CSV...');
+
+        const response = await fetch('/api/export/inventory/csv');
+
+        if (!response.ok) {
+            const data = await response.json();
+            this.showMessage(data.error || 'Failed to export CSV', 'error');
+            return;
+        }
+
+        // Download the CSV
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `inventory_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        this.showMessage('CSV exported successfully!', 'success');
+    } catch (error) {
+        console.error('Error exporting CSV:', error);
+        this.showMessage('Failed to export CSV', 'error');
+    } finally {
+        this.hideLoading();
+    }
+};
+
+MyEstateAllyApp.prototype.exportDocumentsCSV = async function() {
+    try {
+        this.showLoading('Generating documents list...');
+
+        const response = await fetch('/api/export/documents/csv');
+
+        if (!response.ok) {
+            const data = await response.json();
+            this.showMessage(data.error || 'Failed to export documents', 'error');
+            return;
+        }
+
+        // Download the CSV
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `documents_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        this.showMessage('Documents list exported!', 'success');
+    } catch (error) {
+        console.error('Error exporting documents:', error);
+        this.showMessage('Failed to export documents', 'error');
+    } finally {
+        this.hideLoading();
+    }
+};
+
+MyEstateAllyApp.prototype.printInventory = function() {
+    // Create print-friendly version
+    const printWindow = window.open('', '_blank');
+    const doc = printWindow.document;
+
+    // Calculate total value
+    const totalValue = this.inventory.reduce((sum, item) => sum + (item.estimated_value || 0), 0);
+
+    // Build HTML
+    doc.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Estate Inventory - ${new Date().toLocaleDateString()}</title>
+            <style>
+                @media print {
+                    @page {
+                        margin: 0.5in;
+                    }
+                }
+                body {
+                    font-family: Arial, sans-serif;
+                    padding: 20px;
+                    color: #333;
+                }
+                h1 {
+                    color: #4F46E5;
+                    border-bottom: 3px solid #4F46E5;
+                    padding-bottom: 10px;
+                    margin-bottom: 20px;
+                }
+                .summary {
+                    background: #f9fafb;
+                    padding: 15px;
+                    border-radius: 8px;
+                    margin-bottom: 30px;
+                }
+                .summary p {
+                    margin: 5px 0;
+                    font-size: 14px;
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-top: 20px;
+                }
+                th {
+                    background: #4F46E5;
+                    color: white;
+                    padding: 12px;
+                    text-align: left;
+                    font-weight: 600;
+                }
+                td {
+                    padding: 10px 12px;
+                    border-bottom: 1px solid #e5e7eb;
+                }
+                tr:nth-child(even) {
+                    background: #f9fafb;
+                }
+                .footer {
+                    margin-top: 30px;
+                    text-align: center;
+                    font-size: 12px;
+                    color: #6b7280;
+                }
+            </style>
+        </head>
+        <body>
+            <h1>Estate Inventory Report</h1>
+
+            <div class="summary">
+                <p><strong>Total Items:</strong> ${this.inventory.length}</p>
+                <p><strong>Total Value:</strong> $${totalValue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+                <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Item Name</th>
+                        <th>Category</th>
+                        <th>Value</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${this.inventory.map(item => `
+                        <tr>
+                            <td>${item.name || ''}</td>
+                            <td>${item.category || ''}</td>
+                            <td>$${(item.estimated_value || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                            <td>${(item.status || 'active').charAt(0).toUpperCase() + (item.status || 'active').slice(1)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+
+            <div class="footer">
+                <p>Generated by MyEstateAlly - AI-Powered Estate Management</p>
+            </div>
+
+            <script>
+                window.onload = function() {
+                    window.print();
+                };
+            </script>
+        </body>
+        </html>
+    `);
+
+    doc.close();
+};
 
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
