@@ -3592,6 +3592,149 @@ MyEstateAllyApp.prototype.printInventory = function() {
     doc.close();
 };
 
+/**
+ * Load activity log for current estate
+ */
+MyEstateAllyApp.prototype.loadActivityLog = async function() {
+    try {
+        const response = await fetch('/api/activity-log?limit=50');
+        const data = await response.json();
+
+        if (data.success) {
+            this.displayActivityLog(data.activities);
+        } else {
+            console.error('Failed to load activity log:', data.error);
+        }
+    } catch (error) {
+        console.error('Error loading activity log:', error);
+    }
+};
+
+/**
+ * Display activity log
+ */
+MyEstateAllyApp.prototype.displayActivityLog = function(activities) {
+    const list = document.getElementById('activity-log-list');
+
+    if (!activities || activities.length === 0) {
+        list.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-history"></i>
+                <p>No activity yet</p>
+                <p class="empty-state-subtitle">Changes to your inventory will appear here</p>
+            </div>
+        `;
+        return;
+    }
+
+    list.innerHTML = activities.map(activity => {
+        const actionIcons = {
+            'added': 'fa-plus-circle',
+            'updated': 'fa-edit',
+            'deleted': 'fa-trash',
+            'claimed': 'fa-hand-paper',
+            'unclaimed': 'fa-hand-point-left'
+        };
+
+        const actionColors = {
+            'added': '#10b981',
+            'updated': '#3b82f6',
+            'deleted': '#ef4444',
+            'claimed': '#f59e0b',
+            'unclaimed': '#6b7280'
+        };
+
+        const icon = actionIcons[activity.action] || 'fa-circle';
+        const color = actionColors[activity.action] || '#6b7280';
+        const timestamp = new Date(activity.timestamp).toLocaleString();
+
+        return `
+            <div class="activity-item">
+                <div class="activity-icon" style="background-color: ${color}">
+                    <i class="fas ${icon}"></i>
+                </div>
+                <div class="activity-content">
+                    <div class="activity-header">
+                        <span class="activity-action">${activity.action.charAt(0).toUpperCase() + activity.action.slice(1)}</span>
+                        <span class="activity-user">${activity.user_email}</span>
+                    </div>
+                    <div class="activity-item-name">${activity.item_name || 'Unknown item'}</div>
+                    <div class="activity-timestamp">${timestamp}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+};
+
+/**
+ * Claim an item
+ */
+MyEstateAllyApp.prototype.claimItem = async function(itemId) {
+    try {
+        const response = await fetch(`/api/items/${itemId}/claim`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            this.showMessage(data.message, 'success');
+            if (data.has_conflict) {
+                this.showMessage('Multiple people want this item', 'warning');
+            }
+            this.loadInventory();
+        } else {
+            this.showMessage(data.error || 'Failed to claim item', 'error');
+        }
+    } catch (error) {
+        console.error('Error claiming item:', error);
+        this.showMessage('Failed to claim item', 'error');
+    }
+};
+
+/**
+ * Unclaim an item
+ */
+MyEstateAllyApp.prototype.unclaimItem = async function(itemId) {
+    try {
+        const response = await fetch(`/api/items/${itemId}/unclaim`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            this.showMessage(data.message, 'success');
+            this.loadInventory();
+        } else {
+            this.showMessage(data.error || 'Failed to unclaim item', 'error');
+        }
+    } catch (error) {
+        console.error('Error unclaiming item:', error);
+        this.showMessage('Failed to unclaim item', 'error');
+    }
+};
+
+/**
+ * Get current user's role in estate
+ */
+MyEstateAllyApp.prototype.getUserRole = async function() {
+    try {
+        const response = await fetch('/api/user/role');
+        const data = await response.json();
+        return data.role || 'viewer';
+    } catch (error) {
+        console.error('Error getting user role:', error);
+        return 'viewer';
+    }
+};
+
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.app = new MyEstateAllyApp();

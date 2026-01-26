@@ -4778,6 +4778,119 @@ p {
     color: var(--primary-color);
 }
 
+/* ============================================================================
+   ACTIVITY LOG STYLES
+   ============================================================================ */
+
+.activity-log-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.activity-item {
+    display: flex;
+    gap: var(--spacing-md);
+    padding: var(--spacing-lg);
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    transition: all 0.3s ease;
+}
+
+.activity-item:hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
+}
+
+.activity-icon {
+    flex-shrink: 0;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.25rem;
+}
+
+.activity-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.activity-header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-xs);
+}
+
+.activity-action {
+    font-weight: 600;
+    color: var(--text-dark);
+    font-size: 1rem;
+}
+
+.activity-user {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.activity-item-name {
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-xs);
+}
+
+.activity-timestamp {
+    font-size: 0.8rem;
+    color: var(--text-light);
+}
+
+/* Claim badge */
+.claim-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: #fef3c7;
+    color: #92400e;
+    border-radius: var(--border-radius);
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin-top: var(--spacing-sm);
+}
+
+.claim-badge.conflict {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.claim-badge i {
+    font-size: 1rem;
+}
+
+/* Claim button */
+.btn-claim {
+    background: #f59e0b;
+    color: white;
+}
+
+.btn-claim:hover {
+    background: #d97706;
+}
+
+.btn-unclaim {
+    background: #6b7280;
+    color: white;
+}
+
+.btn-unclaim:hover {
+    background: #4b5563;
+}
+
 /* Print Styles */
 @media print {
     .header-buttons,

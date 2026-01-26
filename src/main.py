@@ -248,6 +248,45 @@ def firestore_get_inventory_item(item_id):
     """Get a single inventory item from Firestore"""
     return storage_service.get_document('inventory', item_id)
 
+def log_activity(estate_id, user_email, action, item_id=None, item_name=None, details=None):
+    """Log an activity to the activity log"""
+    try:
+        activity_id = str(uuid.uuid4())
+        activity = {
+            'id': activity_id,
+            'estate_id': estate_id,
+            'user_email': user_email,
+            'action': action,  # 'added', 'updated', 'deleted', 'claimed', 'unclaimed'
+            'item_id': item_id,
+            'item_name': item_name,
+            'details': details or {},
+            'timestamp': datetime.now().isoformat()
+        }
+
+        # Store in Firestore
+        storage_service.add_document('activity_log', activity_id, activity)
+        logger.info(f"Activity logged: {action} by {user_email}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to log activity: {e}")
+        return False
+
+def get_activity_log(estate_id, limit=50):
+    """Get activity log for an estate"""
+    try:
+        all_activities = storage_service.list_documents('activity_log')
+        # Filter by estate_id and sort by timestamp
+        estate_activities = [
+            a for a in all_activities
+            if a.get('estate_id') == estate_id
+        ]
+        # Sort by timestamp descending
+        estate_activities.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+        return estate_activities[:limit]
+    except Exception as e:
+        logger.error(f"Failed to get activity log: {e}")
+        return []
+
 def firestore_update_inventory_item(item):
     """Update inventory item in Firestore"""
     item_id = item.get('id')
@@ -974,6 +1013,7 @@ def get_items():
 def add_item():
     """Add a new inventory item to the current estate"""
     try:
+        user_id = session.get('user_id')
         # Get current estate ID
         estate_id = get_current_estate_id()
         if not estate_id:
@@ -981,6 +1021,13 @@ def add_item():
                 'success': False,
                 'error': 'No estate selected. Please create or select an estate first.'
             }), 400
+
+        # Check permission to edit (executors and owners can add items)
+        if not check_permission(user_id, estate_id, 'edit'):
+            return jsonify({
+                'success': False,
+                'error': 'You do not have permission to add items'
+            }), 403
 
         data = request.get_json()
 
@@ -1025,7 +1072,18 @@ def add_item():
         if not firestore_add_inventory_item(item):
             inventory_storage[item_id] = item
             save_storage('inventory.json', inventory_storage)
-        
+
+        # Log activity
+        user_email = session.get('user_email', 'Unknown')
+        log_activity(
+            estate_id=estate_id,
+            user_email=user_email,
+            action='added',
+            item_id=item_id,
+            item_name=name,
+            details={'category': category, 'value': estimated_value}
+        )
+
         return jsonify({
             'success': True,
             'message': 'Item added successfully',
@@ -1044,8 +1102,18 @@ def add_item():
 def update_item(item_id):
     """Update an existing inventory item"""
     try:
+        user_id = session.get('user_id')
+        estate_id = get_current_estate_id()
+
+        # Check permission to edit
+        if not check_permission(user_id, estate_id, 'edit'):
+            return jsonify({
+                'success': False,
+                'error': 'You do not have permission to edit items'
+            }), 403
+
         data = request.get_json()
-        
+
         # Check if item exists in in-memory storage
         if item_id not in inventory_storage:
             # Try to load from JSON storage
@@ -1095,7 +1163,18 @@ def update_item(item_id):
             # Fall back to in-memory storage
             inventory_storage[item_id] = item
             logger.info(f"Item {item_id} updated in in-memory storage")
-        
+
+        # Log activity
+        user_email = session.get('user_email', 'Unknown')
+        log_activity(
+            estate_id=estate_id,
+            user_email=user_email,
+            action='updated',
+            item_id=item_id,
+            item_name=item.get('name'),
+            details={'category': item.get('category'), 'value': item.get('estimatedValue')}
+        )
+
         return jsonify({
             'success': True,
             'message': 'Item updated successfully',
@@ -1114,6 +1193,16 @@ def update_item(item_id):
 def delete_item(item_id):
     """Delete an inventory item"""
     try:
+        user_id = session.get('user_id')
+        estate_id = get_current_estate_id()
+
+        # Check permission to delete - only owner can delete
+        if not check_permission(user_id, estate_id, 'delete'):
+            return jsonify({
+                'success': False,
+                'error': 'Only the estate owner can delete items'
+            }), 403
+
         # Check if item exists in in-memory storage
         if item_id not in inventory_storage:
             # Try to load from JSON storage
@@ -1130,7 +1219,10 @@ def delete_item(item_id):
                     'success': False,
                     'error': 'Item not found'
                 }), 404
-        
+
+        # Save item name before deleting for activity log
+        item_name = inventory_storage[item_id].get('name', 'Unknown')
+
         # Delete from storage
         try:
             # Try Firestore first
@@ -1149,7 +1241,17 @@ def delete_item(item_id):
             if item_id in inventory_storage:
                 del inventory_storage[item_id]
                 logger.info(f"Item {item_id} deleted from in-memory storage")
-        
+
+        # Log activity
+        user_email = session.get('user_email', 'Unknown')
+        log_activity(
+            estate_id=estate_id,
+            user_email=user_email,
+            action='deleted',
+            item_id=item_id,
+            item_name=item_name
+        )
+
         return jsonify({
             'success': True,
             'message': 'Item deleted successfully'
@@ -1541,9 +1643,28 @@ def get_documents():
             if doc.get('estate_id') == estate_id
         ]
 
+        # Filter based on user role and document permissions
+        user_email = session.get('user_email')
+        user_role = get_user_role_in_estate(user_id, estate_id)
+
+        filtered_documents = []
+        for doc in estate_documents:
+            access_level = doc.get('access_level', 'all')
+            shared_with = doc.get('shared_with', [])
+
+            # Check if user has access
+            if access_level == 'all':
+                filtered_documents.append(doc)
+            elif access_level == 'executor_only' and user_role in ['owner', 'executor']:
+                filtered_documents.append(doc)
+            elif access_level == 'owner_only' and user_role == 'owner':
+                filtered_documents.append(doc)
+            elif user_email in shared_with:
+                filtered_documents.append(doc)
+
         return jsonify({
             'success': True,
-            'documents': estate_documents
+            'documents': filtered_documents
         })
 
     except Exception as e:
@@ -1781,6 +1902,110 @@ def get_document_categories():
         'success': True,
         'categories': DOCUMENT_CATEGORIES
     })
+
+@app.route('/api/documents/<doc_id>/permissions', methods=['PUT'])
+@require_auth
+def update_document_permissions(doc_id):
+    """Update document access permissions"""
+    try:
+        user_id = session.get('user_id')
+        estate_id = get_current_estate_id()
+
+        if not estate_id:
+            return jsonify({'success': False, 'error': 'No estate selected'}), 400
+
+        # Only owner and executors can manage document permissions
+        if not check_permission(user_id, estate_id, 'manage_members'):
+            return jsonify({
+                'success': False,
+                'error': 'You do not have permission to manage document permissions'
+            }), 403
+
+        data = request.get_json()
+        access_level = data.get('access_level', 'all')  # 'all', 'executor_only', 'owner_only'
+
+        # Get documents from storage
+        documents = storage_service.list_documents('documents')
+        doc = None
+        for d in documents:
+            if d.get('id') == doc_id and d.get('estate_id') == estate_id:
+                doc = d
+                break
+
+        if not doc:
+            return jsonify({'success': False, 'error': 'Document not found'}), 404
+
+        # Update access level
+        doc['access_level'] = access_level
+        doc['lastModified'] = datetime.now().isoformat()
+
+        # Save to Firestore
+        storage_service.update_document('documents', doc_id, doc)
+
+        return jsonify({
+            'success': True,
+            'message': 'Document permissions updated',
+            'document': doc
+        })
+
+    except Exception as e:
+        logger.error(f"Error updating document permissions: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to update permissions'
+        }), 500
+
+@app.route('/api/documents/<doc_id>/share', methods=['POST'])
+@require_auth
+def share_document(doc_id):
+    """Share a document with specific family members"""
+    try:
+        user_id = session.get('user_id')
+        estate_id = get_current_estate_id()
+
+        if not estate_id:
+            return jsonify({'success': False, 'error': 'No estate selected'}), 400
+
+        # Check permission
+        if not check_permission(user_id, estate_id, 'manage_members'):
+            return jsonify({
+                'success': False,
+                'error': 'You do not have permission to share documents'
+            }), 403
+
+        data = request.get_json()
+        shared_with = data.get('shared_with', [])  # List of email addresses
+
+        # Get document
+        documents = storage_service.list_documents('documents')
+        doc = None
+        for d in documents:
+            if d.get('id') == doc_id and d.get('estate_id') == estate_id:
+                doc = d
+                break
+
+        if not doc:
+            return jsonify({'success': False, 'error': 'Document not found'}), 404
+
+        # Update shared_with list
+        doc['shared_with'] = shared_with
+        doc['lastModified'] = datetime.now().isoformat()
+
+        # Save to Firestore
+        storage_service.update_document('documents', doc_id, doc)
+
+        return jsonify({
+            'success': True,
+            'message': 'Document shared successfully',
+            'document': doc
+        })
+
+    except Exception as e:
+        logger.error(f"Error sharing document: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to share document'
+        }), 500
 
 @app.route('/api/debug/test-auth')
 def debug_test_auth():
@@ -4414,6 +4639,171 @@ def dispose_item(item_id):
         return jsonify({
             'success': False,
             'error': 'Failed to dispose item'
+        }), 500
+
+@app.route('/api/activity-log', methods=['GET'])
+@require_auth
+def get_activity_log_endpoint():
+    """Get activity log for current estate"""
+    try:
+        estate_id = get_current_estate_id()
+        if not estate_id:
+            return jsonify({'success': False, 'error': 'No estate selected'}), 400
+
+        limit = request.args.get('limit', 50, type=int)
+        activities = get_activity_log(estate_id, limit)
+
+        return jsonify({
+            'success': True,
+            'activities': activities
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting activity log: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to get activity log'
+        }), 500
+
+@app.route('/api/items/<item_id>/claim', methods=['POST'])
+@require_auth
+def claim_item(item_id):
+    """Claim an item (heir marks it as wanted)"""
+    try:
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+        estate_id = get_current_estate_id()
+
+        if not estate_id:
+            return jsonify({'success': False, 'error': 'No estate selected'}), 400
+
+        # Check permission - heirs and above can claim
+        if not check_permission(user_id, estate_id, 'mark_wants'):
+            return jsonify({
+                'success': False,
+                'error': 'You do not have permission to claim items'
+            }), 403
+
+        # Get item
+        if item_id not in inventory_storage:
+            fresh_storage = load_storage('inventory.json')
+            if item_id not in fresh_storage:
+                return jsonify({'success': False, 'error': 'Item not found'}), 404
+            inventory_storage[item_id] = fresh_storage[item_id]
+
+        item = inventory_storage[item_id]
+
+        # Initialize claims array if not exists
+        if 'claims' not in item:
+            item['claims'] = []
+
+        # Check if already claimed by this user
+        if user_email in item['claims']:
+            return jsonify({
+                'success': False,
+                'error': 'You have already claimed this item'
+            }), 400
+
+        # Add claim
+        item['claims'].append(user_email)
+        item['lastModified'] = datetime.now().isoformat()
+
+        # Save to storage
+        try:
+            firestore_update_inventory_item(item)
+        except:
+            inventory_storage[item_id] = item
+            save_storage('inventory.json', inventory_storage)
+
+        # Log activity
+        log_activity(
+            estate_id=estate_id,
+            user_email=user_email,
+            action='claimed',
+            item_id=item_id,
+            item_name=item.get('name'),
+            details={'total_claims': len(item['claims'])}
+        )
+
+        return jsonify({
+            'success': True,
+            'message': 'Item claimed successfully',
+            'item': item,
+            'has_conflict': len(item['claims']) > 1
+        })
+
+    except Exception as e:
+        logger.error(f"Error claiming item: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to claim item'
+        }), 500
+
+@app.route('/api/items/<item_id>/unclaim', methods=['POST'])
+@require_auth
+def unclaim_item(item_id):
+    """Unclaim an item (remove claim)"""
+    try:
+        user_id = session.get('user_id')
+        user_email = session.get('user_email')
+        estate_id = get_current_estate_id()
+
+        if not estate_id:
+            return jsonify({'success': False, 'error': 'No estate selected'}), 400
+
+        # Check permission
+        if not check_permission(user_id, estate_id, 'mark_wants'):
+            return jsonify({
+                'success': False,
+                'error': 'You do not have permission to unclaim items'
+            }), 403
+
+        # Get item
+        if item_id not in inventory_storage:
+            fresh_storage = load_storage('inventory.json')
+            if item_id not in fresh_storage:
+                return jsonify({'success': False, 'error': 'Item not found'}), 404
+            inventory_storage[item_id] = fresh_storage[item_id]
+
+        item = inventory_storage[item_id]
+
+        # Remove claim
+        if 'claims' in item and user_email in item['claims']:
+            item['claims'].remove(user_email)
+            item['lastModified'] = datetime.now().isoformat()
+
+            # Save to storage
+            try:
+                firestore_update_inventory_item(item)
+            except:
+                inventory_storage[item_id] = item
+                save_storage('inventory.json', inventory_storage)
+
+            # Log activity
+            log_activity(
+                estate_id=estate_id,
+                user_email=user_email,
+                action='unclaimed',
+                item_id=item_id,
+                item_name=item.get('name')
+            )
+
+            return jsonify({
+                'success': True,
+                'message': 'Claim removed successfully',
+                'item': item
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'You have not claimed this item'
+            }), 400
+
+    except Exception as e:
+        logger.error(f"Error unclaiming item: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to unclaim item'
         }), 500
 
 @app.route('/api/estate/timeline', methods=['GET', 'POST'])

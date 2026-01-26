@@ -115,6 +115,10 @@
                     <i class="fas fa-file-alt"></i>
                     <span>Documents</span>
                 </button>
+                <button class="nav-btn" data-section="activity-log">
+                    <i class="fas fa-history"></i>
+                    <span>Activity</span>
+                </button>
                 <button class="nav-btn" data-section="legacy">
                     <i class="fas fa-heart"></i>
                     <span>Legacy</span>
@@ -770,6 +774,24 @@
                         <button class="btn primary" onclick="app.showUploadDocumentModal()">
                             <i class="fas fa-upload"></i> Upload First Document
                         </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Activity Log Section -->
+            <section id="activity-log" class="section">
+                <div class="section-header">
+                    <h2><i class="fas fa-history"></i> Activity Log</h2>
+                    <button class="btn secondary" onclick="app.loadActivityLog()">
+                        <i class="fas fa-sync"></i> Refresh
+                    </button>
+                </div>
+
+                <div id="activity-log-list" class="activity-log-list">
+                    <div class="empty-state">
+                        <i class="fas fa-history"></i>
+                        <p>No activity yet</p>
+                        <p class="empty-state-subtitle">Changes to your inventory will appear here</p>
                     </div>
                 </div>
             </section>
