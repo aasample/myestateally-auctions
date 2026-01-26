@@ -3735,6 +3735,122 @@ MyEstateAllyApp.prototype.getUserRole = async function() {
     }
 };
 
+/**
+ * Show AI search modal
+ */
+MyEstateAllyApp.prototype.showAISearchModal = function() {
+    this.openModal('ai-search-modal');
+    document.getElementById('ai-search-query').value = '';
+    document.getElementById('ai-search-results').innerHTML = '';
+};
+
+/**
+ * Perform AI-powered natural language search
+ */
+MyEstateAllyApp.prototype.performAISearch = async function() {
+    try {
+        const query = document.getElementById('ai-search-query').value.trim();
+
+        if (!query) {
+            this.showMessage('Please enter a search query', 'error');
+            return;
+        }
+
+        this.showLoading('AI is searching...');
+
+        const response = await fetch('/api/ai/search', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ query })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            const resultsDiv = document.getElementById('ai-search-results');
+
+            if (data.items.length === 0) {
+                resultsDiv.innerHTML = `<div class="ai-no-results"><i class="fas fa-search"></i><p>No items found</p></div>`;
+            } else {
+                resultsDiv.innerHTML = `
+                    <div class="ai-results-header">
+                        <h4>Found ${data.items.length} item(s)</h4>
+                        <p>${data.explanation}</p>
+                    </div>
+                `;
+            }
+
+            this.showMessage('Search completed!', 'success');
+        } else {
+            this.showMessage(data.error || 'AI search failed', 'error');
+        }
+    } catch (error) {
+        console.error('Error with AI search:', error);
+        this.showMessage('Failed to perform AI search', 'error');
+    } finally {
+        this.hideLoading();
+    }
+};
+
+/**
+ * Get AI valuation for an item
+ */
+MyEstateAllyApp.prototype.getAIValuation = async function(itemData) {
+    try {
+        this.openModal('ai-valuation-modal');
+        document.getElementById('ai-valuation-result').style.display = 'none';
+        document.getElementById('ai-valuation-loading').style.display = 'block';
+
+        const response = await fetch('/api/ai/value-item', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(itemData)
+        });
+
+        const data = await response.json();
+        document.getElementById('ai-valuation-loading').style.display = 'none';
+
+        if (data.success) {
+            const valuation = data.valuation;
+            this.currentAIValuation = valuation.estimated_value;
+
+            document.getElementById('ai-value-range').textContent =
+                `$${valuation.min_value.toLocaleString()} - $${valuation.max_value.toLocaleString()}`;
+            document.getElementById('ai-estimated-value').textContent =
+                `$${valuation.estimated_value.toLocaleString()}`;
+            document.getElementById('ai-valuation-explanation').textContent = valuation.explanation;
+            document.getElementById('ai-valuation-condition').textContent = valuation.condition;
+
+            document.getElementById('ai-valuation-result').style.display = 'block';
+        } else {
+            this.showMessage(data.error || 'AI valuation failed', 'error');
+            this.closeModal('ai-valuation-modal');
+        }
+    } catch (error) {
+        console.error('Error with AI valuation:', error);
+        this.showMessage('Failed to get AI valuation', 'error');
+        this.closeModal('ai-valuation-modal');
+    }
+};
+
+/**
+ * Apply AI valuation to current item
+ */
+MyEstateAllyApp.prototype.applyAIValuation = function() {
+    if (this.currentAIValuation) {
+        const valueInput = document.getElementById('edit-estimated-value') || document.getElementById('estimated-value');
+        if (valueInput) {
+            valueInput.value = this.currentAIValuation;
+        }
+        this.closeModal('ai-valuation-modal');
+        this.showMessage('AI valuation applied!', 'success');
+    }
+};
+
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.app = new MyEstateAllyApp();

@@ -38,6 +38,7 @@ from reportlab.lib.units import inch
 from reportlab.lib import colors
 import logging
 import time
+from openai import OpenAI
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -157,6 +158,18 @@ def save_storage(filename, data):
             json.dump(data, f, indent=2)
     except Exception as e:
         logger.error(f"Error saving {filename}: {e}")
+
+# OpenAI setup for AI features
+openai_client = None
+try:
+    openai_api_key = os.environ.get('OPENAI_API_KEY')
+    if openai_api_key:
+        openai_client = OpenAI(api_key=openai_api_key)
+        logger.info("OpenAI client initialized")
+    else:
+        logger.warning("OPENAI_API_KEY not found - AI features will be disabled")
+except Exception as e:
+    logger.error(f"Failed to initialize OpenAI client: {e}")
 
 # Firestore (preferred on App Engine) setup
 try:
@@ -4804,6 +4817,254 @@ def unclaim_item(item_id):
         return jsonify({
             'success': False,
             'error': 'Failed to unclaim item'
+        }), 500
+
+@app.route('/api/ai/value-item', methods=['POST'])
+@require_auth
+def ai_value_item():
+    """Use AI to estimate item value from photo and description"""
+    try:
+        if not openai_client:
+            return jsonify({
+                'success': False,
+                'error': 'AI features are not available. Please configure OPENAI_API_KEY.'
+            }), 503
+
+        data = request.get_json()
+        item_name = data.get('name', '')
+        item_description = data.get('description', '')
+        item_category = data.get('category', '')
+        photo_base64 = data.get('photo', '')
+
+        if not item_name:
+            return jsonify({
+                'success': False,
+                'error': 'Item name is required'
+            }), 400
+
+        # Build prompt for AI
+        prompt = f"""Estimate the current market value of this item in USD.
+
+Item Name: {item_name}
+Category: {item_category}
+Description: {item_description}
+
+Provide:
+1. Estimated value range (min-max)
+2. Most likely value
+3. Brief explanation of valuation
+4. Condition assumptions
+
+Format response as JSON:
+{{
+    "min_value": number,
+    "max_value": number,
+    "estimated_value": number,
+    "explanation": "string",
+    "condition": "string"
+}}"""
+
+        # Call OpenAI API
+        messages = [
+            {
+                "role": "system",
+                "content": "You are an expert appraiser specializing in household items, antiques, and personal property. Provide accurate market value estimates based on current market conditions."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+
+        # Add image if provided
+        if photo_base64 and photo_base64.startswith('data:image'):
+            messages[1]["content"] = [
+                {"type": "text", "text": prompt},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": photo_base64}
+                }
+            ]
+
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            response_format={"type": "json_object"},
+            max_tokens=500
+        )
+
+        ai_response = json.loads(response.choices[0].message.content)
+
+        return jsonify({
+            'success': True,
+            'valuation': ai_response
+        })
+
+    except Exception as e:
+        logger.error(f"Error with AI valuation: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to get AI valuation'
+        }), 500
+
+@app.route('/api/ai/suggest-category', methods=['POST'])
+@require_auth
+def ai_suggest_category():
+    """Use AI to suggest item category"""
+    try:
+        if not openai_client:
+            return jsonify({
+                'success': False,
+                'error': 'AI features are not available'
+            }), 503
+
+        data = request.get_json()
+        item_name = data.get('name', '')
+        item_description = data.get('description', '')
+
+        if not item_name:
+            return jsonify({
+                'success': False,
+                'error': 'Item name is required'
+            }), 400
+
+        # Standard categories
+        categories = [
+            "Furniture", "Jewelry", "Electronics", "Artwork", "Collectibles",
+            "Kitchenware", "Books", "Clothing", "Tools", "Appliances",
+            "Antiques", "Vehicles", "Real Estate", "Musical Instruments", "Other"
+        ]
+
+        prompt = f"""Given this item, suggest the most appropriate category from this list: {', '.join(categories)}
+
+Item Name: {item_name}
+Description: {item_description}
+
+Respond with JSON:
+{{
+    "category": "suggested category from the list",
+    "confidence": "high/medium/low",
+    "reason": "brief explanation"
+}}"""
+
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant that categorizes household items accurately."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=200
+        )
+
+        ai_response = json.loads(response.choices[0].message.content)
+
+        return jsonify({
+            'success': True,
+            'suggestion': ai_response
+        })
+
+    except Exception as e:
+        logger.error(f"Error with AI category suggestion: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to get category suggestion'
+        }), 500
+
+@app.route('/api/ai/search', methods=['POST'])
+@require_auth
+def ai_natural_language_search():
+    """Natural language search for inventory items"""
+    try:
+        if not openai_client:
+            return jsonify({
+                'success': False,
+                'error': 'AI features are not available'
+            }), 503
+
+        user_id = session.get('user_id')
+        estate_id = get_current_estate_id()
+
+        if not estate_id:
+            return jsonify({'success': False, 'error': 'No estate selected'}), 400
+
+        data = request.get_json()
+        query = data.get('query', '')
+
+        if not query:
+            return jsonify({
+                'success': False,
+                'error': 'Search query is required'
+            }), 400
+
+        # Get all inventory items
+        items = firestore_list_inventory_items() or []
+        estate_items = [item for item in items if item.get('estate_id') == estate_id]
+
+        # Create simplified item list for AI
+        items_summary = [
+            {
+                'id': item.get('id'),
+                'name': item.get('name'),
+                'category': item.get('category'),
+                'description': item.get('description', '')[:100],
+                'value': item.get('estimatedValue', 0)
+            }
+            for item in estate_items
+        ]
+
+        prompt = f"""Given this natural language query: "{query}"
+
+Find matching items from this inventory:
+{json.dumps(items_summary, indent=2)}
+
+Return item IDs that match the query. Consider name, category, description, and value.
+
+Respond with JSON:
+{{
+    "matching_ids": ["id1", "id2", ...],
+    "explanation": "why these items match"
+}}"""
+
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a search assistant helping users find items in their estate inventory."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=1000
+        )
+
+        ai_response = json.loads(response.choices[0].message.content)
+        matching_ids = ai_response.get('matching_ids', [])
+
+        # Get full item details
+        matching_items = [item for item in estate_items if item.get('id') in matching_ids]
+
+        return jsonify({
+            'success': True,
+            'items': matching_items,
+            'explanation': ai_response.get('explanation', '')
+        })
+
+    except Exception as e:
+        logger.error(f"Error with AI search: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to perform AI search'
         }), 500
 
 @app.route('/api/estate/timeline', methods=['GET', 'POST'])

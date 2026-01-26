@@ -301,6 +301,11 @@
                             <input type="text" id="search-input" placeholder="Search items..." onkeyup="app.filterInventory()">
                         </div>
 
+                        <button class="btn primary ai-btn" onclick="app.showAISearchModal()" title="AI-Powered Natural Language Search">
+                            <i class="fas fa-robot"></i>
+                            AI Search
+                        </button>
+
                         <select id="category-filter" onchange="app.filterInventory()">
                             <option value="">All Categories</option>
                             <option value="Furniture">Furniture</option>
@@ -1432,6 +1437,81 @@
         <div class="loading-content">
             <div class="spinner"></div>
             <p id="loading-text">Processing...</p>
+        </div>
+    </div>
+
+    <!-- AI Search Modal -->
+    <div id="ai-search-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-robot"></i> AI-Powered Search</h2>
+                <button class="close-btn" onclick="closeModal('ai-search-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="ai-modal-description">
+                    Describe what you're looking for in natural language. For example:
+                    "Show me all furniture worth over $500" or "Find antique jewelry"
+                </p>
+                <div class="form-group">
+                    <label for="ai-search-query">What are you looking for?</label>
+                    <textarea id="ai-search-query" rows="3"
+                              placeholder="e.g., Show me all valuable electronics, Find items assigned to John, Antiques from the 1900s"></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn secondary" onclick="closeModal('ai-search-modal')">
+                        Cancel
+                    </button>
+                    <button type="button" class="btn primary" onclick="app.performAISearch()">
+                        <i class="fas fa-search"></i> Search with AI
+                    </button>
+                </div>
+                <div id="ai-search-results" class="ai-results"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Valuation Modal -->
+    <div id="ai-valuation-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-robot"></i> AI Item Valuation</h2>
+                <button class="close-btn" onclick="closeModal('ai-valuation-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="ai-modal-description">
+                    Get an AI-powered estimate of your item's value based on its description and photo.
+                </p>
+                <div class="ai-valuation-result" id="ai-valuation-result" style="display: none;">
+                    <div class="valuation-header">
+                        <h3>Estimated Value</h3>
+                        <div class="value-range">
+                            <span class="value-label">Range:</span>
+                            <span class="value-amount" id="ai-value-range">$0 - $0</span>
+                        </div>
+                        <div class="value-estimate">
+                            <span class="value-label">Most Likely:</span>
+                            <span class="value-amount primary" id="ai-estimated-value">$0</span>
+                        </div>
+                    </div>
+                    <div class="valuation-details">
+                        <h4>Valuation Explanation</h4>
+                        <p id="ai-valuation-explanation"></p>
+                        <p class="valuation-condition"><strong>Condition:</strong> <span id="ai-valuation-condition"></span></p>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn secondary" onclick="closeModal('ai-valuation-modal')">
+                            Close
+                        </button>
+                        <button type="button" class="btn primary" onclick="app.applyAIValuation()">
+                            <i class="fas fa-check"></i> Use This Value
+                        </button>
+                    </div>
+                </div>
+                <div id="ai-valuation-loading" style="display: none;">
+                    <div class="loading-spinner"></div>
+                    <p>AI is analyzing your item...</p>
+                </div>
+            </div>
         </div>
     </div>
 

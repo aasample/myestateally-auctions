@@ -4891,6 +4891,55 @@ p {
     background: #4b5563;
 }
 
+/* ============================================================================
+   AI FEATURES STYLES
+   ============================================================================ */
+
+.ai-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+}
+
+.ai-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(102, 126, 234, 0.3);
+}
+
+.ai-modal-description {
+    background: var(--bg-light);
+    padding: var(--spacing-md);
+    border-radius: var(--border-radius);
+    margin-bottom: var(--spacing-lg);
+    font-size: 0.95rem;
+}
+
+.valuation-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: var(--spacing-lg);
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
+}
+
+.value-amount.primary {
+    font-size: 1.75rem;
+    color: #ffd700;
+}
+
+.loading-spinner {
+    width: 50px;
+    height: 50px;
+    margin: 0 auto var(--spacing-md);
+    border: 4px solid var(--bg-light);
+    border-top: 4px solid var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
 /* Print Styles */
 @media print {
     .header-buttons,
