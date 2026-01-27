@@ -722,6 +722,12 @@ REQUIRE_AUTH_FOR_ALL = os.environ.get('REQUIRE_AUTH_FOR_ALL', 'false').lower() i
 
 # Request hook for authentication enforcement
 @app.before_request
+def redirect_non_www():
+    """Redirect non-www to www until SSL certificate is provisioned"""
+    if request.host == 'myestateally.com':
+        return redirect(f'https://www.myestateally.com{request.path}', code=301)
+
+@app.before_request
 def enforce_authentication():
     """Enforce authentication for all routes if enabled"""
     if not REQUIRE_AUTH_FOR_ALL:
