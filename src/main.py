@@ -159,13 +159,28 @@ def save_storage(filename, data):
     except Exception as e:
         logger.error(f"Error saving {filename}: {e}")
 
+# Helper function to get secrets from Secret Manager
+def get_secret(secret_name):
+    """Get secret from Google Cloud Secret Manager"""
+    try:
+        from google.cloud import secretmanager
+        client = secretmanager.SecretManagerServiceClient()
+        project_id = os.environ.get('GOOGLE_CLOUD_PROJECT', 'estateally-ai-services')
+        secret_path = f"projects/{project_id}/secrets/{secret_name}/versions/latest"
+        response = client.access_secret_version(request={"name": secret_path})
+        return response.payload.data.decode('UTF-8')
+    except Exception as e:
+        logger.error(f"Failed to get secret {secret_name}: {e}")
+        return None
+
 # OpenAI setup for AI features
 openai_client = None
 try:
-    openai_api_key = os.environ.get('OPENAI_API_KEY')
+    # Try environment variable first, then Secret Manager
+    openai_api_key = os.environ.get('OPENAI_API_KEY') or get_secret('OPENAI_API_KEY')
     if openai_api_key:
         openai_client = OpenAI(api_key=openai_api_key)
-        logger.info("OpenAI client initialized")
+        logger.info("OpenAI client initialized successfully")
     else:
         logger.warning("OPENAI_API_KEY not found - AI features will be disabled")
 except Exception as e:

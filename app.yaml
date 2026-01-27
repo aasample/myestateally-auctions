@@ -26,6 +26,3 @@ handlers:
 - url: /.*
   script: auto
   secure: always
-
-
-
