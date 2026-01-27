@@ -3639,10 +3639,16 @@ def create_estate():
         estate_storage['user_estates'][user_id].append(estate_id)
         
         save_estate_storage()
-        
-        # Set as current estate
+
+        # Set as current estate (use both for compatibility)
         session['estate_id'] = estate_id
-        
+        session['current_estate_id'] = estate_id
+
+        # Save as user's last used estate
+        if user_id in auth_storage['users']:
+            auth_storage['users'][user_id]['last_used_estate'] = estate_id
+            save_auth_storage()
+
         return jsonify({
             'success': True,
             'message': 'Estate created successfully',
@@ -3730,13 +3736,19 @@ def switch_estate():
                 'success': False,
                 'error': 'Access denied to this estate'
             }), 403
-        
-        # Set as current estate
+
+        # Set as current estate (using current_estate_id for consistency)
         session['estate_id'] = estate_id
-        
+        session['current_estate_id'] = estate_id
+
+        # Save as user's last used estate
+        if user_id in auth_storage['users']:
+            auth_storage['users'][user_id]['last_used_estate'] = estate_id
+            save_auth_storage()
+
         estate = estate_storage['estates'][estate_id].copy()
         estate['id'] = estate_id
-        
+
         return jsonify({
             'success': True,
             'message': 'Estate switched successfully',
@@ -6271,9 +6283,22 @@ def auth_google_callback():
         # Also set Flask session
         session['user_id'] = user_id
         session['user_email'] = user_data['email']
-        
+
+        # Auto-select user's first estate or last used estate
+        user_estates = get_user_estates(user_id)
+        if user_estates:
+            # Check if user has a last_used_estate preference
+            last_estate_id = user_data.get('last_used_estate')
+            if last_estate_id and any(e['id'] == last_estate_id for e in user_estates):
+                session['current_estate_id'] = last_estate_id
+                logger.info(f"Auto-selected last used estate: {last_estate_id}")
+            else:
+                # Default to first estate
+                session['current_estate_id'] = user_estates[0]['id']
+                logger.info(f"Auto-selected first estate: {user_estates[0]['id']}")
+
         logger.info(f"Google login successful for user: {user_data['email']}")
-        
+
         resp = make_response(redirect(url_for('index')))
         # Only use secure cookies in production (HTTPS)
         is_production = os.environ.get('GAE_ENV') or request.is_secure or 'https' in request.url_root.lower()
