@@ -84,6 +84,7 @@ load_dotenv()
 app.config['SESSION_COOKIE_SECURE'] = True  # HTTPS only
 app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent JavaScript access
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)  # Session lasts 30 days
 
 # Note: We're NOT using Flask-Session extension, just Flask's built-in session
 # This avoids the secret key configuration issues we were having
@@ -760,7 +761,11 @@ def index():
     Main route - shows landing page for non-authenticated users,
     dashboard for authenticated users
     """
-    if is_authenticated():
+    authenticated = is_authenticated()
+    user_id = session.get('user_id')
+    logger.info(f"Index route accessed: authenticated={authenticated}, user_id={user_id}, session_keys={list(session.keys())}")
+
+    if authenticated:
         return render_template('index.html')
     else:
         return render_template('landing.html')
@@ -6281,8 +6286,11 @@ def auth_google_callback():
         save_auth_storage()  # Save again after creating session
         
         # Also set Flask session
+        session.permanent = True  # Make session persistent
         session['user_id'] = user_id
         session['user_email'] = user_data['email']
+
+        logger.info(f"Session set for user {user_id}: user_id={session.get('user_id')}, email={session.get('user_email')}")
 
         # Auto-select user's first estate or last used estate
         try:
