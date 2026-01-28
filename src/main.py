@@ -6285,17 +6285,23 @@ def auth_google_callback():
         session['user_email'] = user_data['email']
 
         # Auto-select user's first estate or last used estate
-        user_estates = get_user_estates(user_id)
-        if user_estates:
-            # Check if user has a last_used_estate preference
-            last_estate_id = user_data.get('last_used_estate')
-            if last_estate_id and any(e['id'] == last_estate_id for e in user_estates):
-                session['current_estate_id'] = last_estate_id
-                logger.info(f"Auto-selected last used estate: {last_estate_id}")
-            else:
-                # Default to first estate
-                session['current_estate_id'] = user_estates[0]['id']
-                logger.info(f"Auto-selected first estate: {user_estates[0]['id']}")
+        try:
+            user_estates = get_user_estates(user_id)
+            if user_estates:
+                # Check if user has a last_used_estate preference
+                last_estate_id = user_data.get('last_used_estate')
+                if last_estate_id and any(e['id'] == last_estate_id for e in user_estates):
+                    session['current_estate_id'] = last_estate_id
+                    session['estate_id'] = last_estate_id
+                    logger.info(f"Auto-selected last used estate: {last_estate_id}")
+                else:
+                    # Default to first estate
+                    session['current_estate_id'] = user_estates[0]['id']
+                    session['estate_id'] = user_estates[0]['id']
+                    logger.info(f"Auto-selected first estate: {user_estates[0]['id']}")
+        except Exception as e:
+            logger.warning(f"Could not auto-select estate: {e}")
+            # Don't fail login if estate selection fails
 
         logger.info(f"Google login successful for user: {user_data['email']}")
 
