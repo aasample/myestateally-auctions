@@ -79,6 +79,20 @@ logger.info("Rate limiting initialized")
 # Load environment variables
 load_dotenv()
 
+# Helper function to get secrets from Secret Manager
+def get_secret(secret_name):
+    """Get secret from Google Cloud Secret Manager"""
+    try:
+        from google.cloud import secretmanager
+        client = secretmanager.SecretManagerServiceClient()
+        project_id = os.environ.get('GOOGLE_CLOUD_PROJECT', 'estateally-ai-services')
+        secret_path = f"projects/{project_id}/secrets/{secret_name}/versions/latest"
+        response = client.access_secret_version(request={"name": secret_path})
+        return response.payload.data.decode('UTF-8')
+    except Exception as e:
+        logger.error(f"Failed to get secret {secret_name}: {e}")
+        return None
+
 # Session Configuration - Use Flask's built-in sessions (simpler and more reliable)
 # Flask's built-in sessions use signed cookies which work well with the secret key
 app.config['SESSION_COOKIE_SECURE'] = True  # HTTPS only
@@ -96,8 +110,11 @@ oauth = OAuth(app)
 # Google OAuth (only if credentials are configured)
 google = None
 try:
-    google_client_id = os.environ.get('GOOGLE_CLIENT_ID', '')
-    google_client_secret = os.environ.get('GOOGLE_CLIENT_SECRET', '')
+    # Try environment variable first, then Secret Manager
+    google_client_id = os.environ.get('GOOGLE_CLIENT_ID') or get_secret('GOOGLE_CLIENT_ID') or ''
+    google_client_secret = os.environ.get('GOOGLE_CLIENT_SECRET') or get_secret('GOOGLE_CLIENT_SECRET') or ''
+
+    logger.info(f"Google OAuth credentials loaded: client_id={'present' if google_client_id else 'missing'}, secret={'present' if google_client_secret else 'missing'}")
 
     if google_client_id and google_client_secret:
         google = oauth.register(
@@ -159,20 +176,6 @@ def save_storage(filename, data):
             json.dump(data, f, indent=2)
     except Exception as e:
         logger.error(f"Error saving {filename}: {e}")
-
-# Helper function to get secrets from Secret Manager
-def get_secret(secret_name):
-    """Get secret from Google Cloud Secret Manager"""
-    try:
-        from google.cloud import secretmanager
-        client = secretmanager.SecretManagerServiceClient()
-        project_id = os.environ.get('GOOGLE_CLOUD_PROJECT', 'estateally-ai-services')
-        secret_path = f"projects/{project_id}/secrets/{secret_name}/versions/latest"
-        response = client.access_secret_version(request={"name": secret_path})
-        return response.payload.data.decode('UTF-8')
-    except Exception as e:
-        logger.error(f"Failed to get secret {secret_name}: {e}")
-        return None
 
 # OpenAI setup for AI features
 openai_client = None
