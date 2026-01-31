@@ -723,10 +723,20 @@ REQUIRE_AUTH_FOR_ALL = os.environ.get('REQUIRE_AUTH_FOR_ALL', 'false').lower() i
 
 # Request hook for authentication enforcement
 @app.before_request
-def redirect_non_www():
-    """Redirect non-www to www until SSL certificate is provisioned"""
-    if request.host == 'myestateally.com':
-        return redirect(f'https://www.myestateally.com{request.path}', code=301)
+def redirect_custom_domain_for_oauth():
+    """Redirect custom domain to appspot for OAuth until custom domain is fully configured"""
+    # Only redirect myestateally.com to appspot for OAuth endpoints
+    if 'myestateally.com' in request.host:
+        # Redirect non-www to www
+        if request.host == 'myestateally.com':
+            return redirect(f'https://www.myestateally.com{request.path}', code=301)
+
+        # Redirect OAuth endpoints to appspot until custom domain OAuth is configured
+        if request.path.startswith('/auth/google'):
+            appspot_url = f'https://estateally-ai-services.ue.r.appspot.com{request.path}'
+            if request.query_string:
+                appspot_url += f'?{request.query_string.decode()}'
+            return redirect(appspot_url, code=302)
 
 @app.before_request
 def enforce_authentication():
