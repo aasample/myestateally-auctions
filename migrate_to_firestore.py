@@ -1,204 +1,172 @@
 #!/usr/bin/env python3
 """
-Migration script to move data from JSON files to Firestore
+Migration script: Move data from JSON files to Firestore
+Run ONCE before deploying Firestore-only version
+
+Usage:
+    python migrate_to_firestore.py
 """
+
 import json
 import os
 import sys
 from datetime import datetime
 
+# Add src to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-def migrate_data():
-    """Migrate all data from JSON to Firestore"""
-    print("=" * 60)
-    print("MyEstateAlly - JSON to Firestore Migration Tool")
-    print("=" * 60)
+from services.storage_service import StorageService
 
-    # Check for Firestore credentials
-    if not os.environ.get('GOOGLE_APPLICATION_CREDENTIALS') and not os.environ.get('GOOGLE_CLOUD_PROJECT'):
-        print("\n❌ Error: Google Cloud credentials not configured")
-        print("\nPlease set one of:")
-        print("  - GOOGLE_APPLICATION_CREDENTIALS (path to service account key)")
-        print("  - Run on App Engine (automatic authentication)")
-        print("\nSee MIGRATE_TO_FIRESTORE.md for setup instructions")
-        return False
+def migrate_inventory():
+    """Migrate inventory.json to Firestore"""
+    print("📦 Migrating inventory data...")
 
-    try:
-        from google.cloud import firestore
-        db = firestore.Client()
-        print("\n✅ Connected to Firestore")
-    except Exception as e:
-        print(f"\n❌ Failed to connect to Firestore: {e}")
-        print("\nMake sure:")
-        print("  1. Firestore is enabled in your Google Cloud project")
-        print("  2. google-cloud-firestore is installed (pip install google-cloud-firestore)")
-        print("  3. Credentials are properly configured")
-        return False
+    if not os.path.exists('inventory.json'):
+        print("   No inventory.json found, skipping")
+        return 0
 
-    # Track statistics
-    stats = {
-        'users': 0,
-        'estates': 0,
-        'items': 0
-    }
+    with open('inventory.json', 'r') as f:
+        inventory_data = json.load(f)
 
-    # Migrate Users
-    print("\n" + "=" * 60)
-    print("1. MIGRATING USERS")
-    print("=" * 60)
+    service = StorageService(use_firestore=True)
+    count = 0
 
-    if os.path.exists('auth.json'):
-        try:
-            with open('auth.json', 'r') as f:
-                auth_data = json.load(f)
-                users = auth_data.get('users', {})
+    for item_id, item in inventory_data.items():
+        item['id'] = item_id
+        if service.add_document('inventory', item_id, item):
+            count += 1
 
-            if not users:
-                print("   ℹ️  No users found in auth.json")
-            else:
-                for user_id, user_data in users.items():
-                    try:
-                        # Add migration metadata
-                        user_data['migrated_at'] = datetime.now().isoformat()
-                        user_data['migration_source'] = 'json'
+    print(f"   ✅ Migrated {count} inventory items")
+    return count
 
-                        db.collection('users').document(user_id).set(user_data)
-                        email = user_data.get('email', 'unknown')
-                        print(f"   ✅ {email} (ID: {user_id[:8]}...)")
-                        stats['users'] += 1
-                    except Exception as e:
-                        print(f"   ❌ Failed to migrate user {user_id}: {e}")
+def migrate_users():
+    """Migrate users from auth.json to Firestore"""
+    print("👥 Migrating user data...")
 
-                print(f"\n   📊 Successfully migrated {stats['users']} users")
-        except Exception as e:
-            print(f"   ❌ Error reading auth.json: {e}")
-    else:
-        print("   ℹ️  auth.json not found - skipping users")
+    if not os.path.exists('auth.json'):
+        print("   No auth.json found, skipping")
+        return 0
 
-    # Migrate Estates
-    print("\n" + "=" * 60)
-    print("2. MIGRATING ESTATES")
-    print("=" * 60)
+    with open('auth.json', 'r') as f:
+        auth_data = json.load(f)
 
-    if os.path.exists('estates.json'):
-        try:
-            with open('estates.json', 'r') as f:
-                estates = json.load(f)
+    service = StorageService(use_firestore=True)
+    count = 0
 
-            if not estates:
-                print("   ℹ️  No estates found in estates.json")
-            else:
-                for estate_id, estate_data in estates.items():
-                    try:
-                        # Add migration metadata
-                        estate_data['migrated_at'] = datetime.now().isoformat()
-                        estate_data['migration_source'] = 'json'
+    users = auth_data.get('users', {})
+    for user_id, user in users.items():
+        user['id'] = user_id
+        if service.add_document('users', user_id, user):
+            count += 1
 
-                        db.collection('estates').document(estate_id).set(estate_data)
-                        name = estate_data.get('name', 'Unnamed Estate')
-                        print(f"   ✅ {name} (ID: {estate_id[:8]}...)")
-                        stats['estates'] += 1
-                    except Exception as e:
-                        print(f"   ❌ Failed to migrate estate {estate_id}: {e}")
+    print(f"   ✅ Migrated {count} users")
+    return count
 
-                print(f"\n   📊 Successfully migrated {stats['estates']} estates")
-        except Exception as e:
-            print(f"   ❌ Error reading estates.json: {e}")
-    else:
-        print("   ℹ️  estates.json not found - skipping estates")
+def migrate_estates():
+    """Migrate estates.json to Firestore"""
+    print("🏠 Migrating estate data...")
 
-    # Migrate Inventory Items
-    print("\n" + "=" * 60)
-    print("3. MIGRATING INVENTORY ITEMS")
-    print("=" * 60)
+    if not os.path.exists('estates.json'):
+        print("   No estates.json found, skipping")
+        return 0
 
-    if os.path.exists('inventory.json'):
-        try:
-            with open('inventory.json', 'r') as f:
-                inventory = json.load(f)
+    with open('estates.json', 'r') as f:
+        estate_data = json.load(f)
 
-            if not inventory:
-                print("   ℹ️  No items found in inventory.json")
-            else:
-                for item_id, item_data in inventory.items():
-                    try:
-                        # Add migration metadata
-                        item_data['migrated_at'] = datetime.now().isoformat()
-                        item_data['migration_source'] = 'json'
+    service = StorageService(use_firestore=True)
+    count = 0
 
-                        db.collection('inventory_items').document(item_id).set(item_data)
-                        name = item_data.get('name', 'Unnamed Item')
-                        print(f"   ✅ {name} (ID: {item_id[:8]}...)")
-                        stats['items'] += 1
-                    except Exception as e:
-                        print(f"   ❌ Failed to migrate item {item_id}: {e}")
+    # Migrate estates
+    for estate_id, estate in estate_data.get('estates', {}).items():
+        estate['id'] = estate_id
+        if service.add_document('estates', estate_id, estate):
+            count += 1
 
-                print(f"\n   📊 Successfully migrated {stats['items']} items")
-        except Exception as e:
-            print(f"   ❌ Error reading inventory.json: {e}")
-    else:
-        print("   ℹ️  inventory.json not found - skipping items")
+    # Update user estate lists
+    for user_id, estate_ids in estate_data.get('user_estates', {}).items():
+        user = service.get_document('users', user_id)
+        if user:
+            service.update_document('users', user_id, {'estates': estate_ids})
 
-    # Summary
-    print("\n" + "=" * 60)
-    print("MIGRATION SUMMARY")
-    print("=" * 60)
-    print(f"✅ Users migrated:      {stats['users']}")
-    print(f"✅ Estates migrated:    {stats['estates']}")
-    print(f"✅ Items migrated:      {stats['items']}")
-    print(f"✅ Total documents:     {sum(stats.values())}")
+    print(f"   ✅ Migrated {count} estates")
+    return count
 
-    if sum(stats.values()) > 0:
-        print("\n" + "=" * 60)
-        print("NEXT STEPS")
-        print("=" * 60)
-        print("1. ✅ Verify data in Firestore Console:")
-        print("   https://console.cloud.google.com/firestore")
-        print("\n2. ✅ Test your application locally:")
-        print("   Set USE_FIRESTORE=true in .env")
-        print("   Run: python run_local.py")
-        print("\n3. ✅ Backup your JSON files:")
-        print("   mkdir -p backup")
-        print("   cp *.json backup/")
-        print("\n4. ✅ Update production configuration:")
-        print("   Edit app.yaml.production")
-        print("   Set USE_FIRESTORE: 'true'")
-        print("\n5. ✅ Deploy to production:")
-        print("   gcloud app deploy app.yaml.production")
+def migrate_family_data():
+    """Migrate family.json to Firestore"""
+    print("👨‍👩‍👧‍👦 Migrating family data...")
 
-        print("\n" + "=" * 60)
-        print("⚠️  IMPORTANT REMINDERS")
-        print("=" * 60)
-        print("• Keep JSON backups until you verify everything works")
-        print("• Monitor Firestore usage in Cloud Console")
-        print("• Review MIGRATE_TO_FIRESTORE.md for rollback procedure")
-        print("• Set up Firestore security rules for production")
+    if not os.path.exists('family.json'):
+        print("   No family.json found, skipping")
+        return 0
 
-    return True
+    with open('family.json', 'r') as f:
+        family_data = json.load(f)
 
+    service = StorageService(use_firestore=True)
+    count = 0
+
+    # Migrate estate family data
+    for estate_id, data in family_data.get('estates', {}).items():
+        doc_id = f"estate_{estate_id}_family"
+        data['estate_id'] = estate_id
+        data['id'] = doc_id
+        data['migrated_at'] = datetime.now().isoformat()
+        if service.add_document('family_data', doc_id, data):
+            count += 1
+
+    # Migrate share links
+    link_count = 0
+    for share_id, link in family_data.get('share_links', {}).items():
+        link['id'] = share_id
+        if service.add_document('share_links', share_id, link):
+            link_count += 1
+
+    print(f"   ✅ Migrated {count} family records and {link_count} share links")
+    return count + link_count
+
+def create_backups():
+    """Create backups of JSON files"""
+    print("💾 Creating backups...")
+
+    files = ['inventory.json', 'family.json', 'estates.json', 'auth.json', 'users.json']
+    backup_count = 0
+
+    for filename in files:
+        if os.path.exists(filename):
+            backup_name = f"{filename}.backup"
+            with open(filename, 'r') as f:
+                data = f.read()
+            with open(backup_name, 'w') as f:
+                f.write(data)
+            print(f"   ✅ Backed up {filename} → {backup_name}")
+            backup_count += 1
+
+    return backup_count
 
 if __name__ == '__main__':
-    print("\n⚠️  This will migrate all data from JSON files to Firestore")
-    print("⚠️  Make sure you have backups of your JSON files!\n")
+    print("=" * 60)
+    print("🚀 MyEstateAlly - Firestore Migration Script")
+    print("=" * 60)
+    print()
 
-    try:
-        response = input("Continue with migration? (yes/no): ").strip().lower()
-        if response == 'yes':
-            success = migrate_data()
-            if success:
-                print("\n✅ Migration completed successfully!\n")
-                sys.exit(0)
-            else:
-                print("\n❌ Migration failed. See errors above.\n")
-                sys.exit(1)
-        else:
-            print("\n❌ Migration cancelled by user\n")
-            sys.exit(0)
-    except KeyboardInterrupt:
-        print("\n\n❌ Migration cancelled by user\n")
-        sys.exit(0)
-    except Exception as e:
-        print(f"\n❌ Unexpected error: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+    # Step 1: Create backups
+    backup_count = create_backups()
+    print()
+
+    # Step 2: Migrate data
+    total = 0
+    total += migrate_users()
+    total += migrate_estates()
+    total += migrate_inventory()
+    total += migrate_family_data()
+
+    print()
+    print("=" * 60)
+    print(f"✅ Migration complete!")
+    print(f"   Total records migrated: {total}")
+    print(f"   Backup files created: {backup_count}")
+    print("=" * 60)
+    print()
+    print("⚠️  IMPORTANT: Keep backup files for 30 days")
+    print("   Do not delete *.json.backup files until migration is verified")
+    print()

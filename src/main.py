@@ -173,22 +173,16 @@ import json
 import os
 
 def load_storage(filename):
-    """Load data from JSON file"""
-    try:
-        if os.path.exists(filename):
-            with open(filename, 'r') as f:
-                return json.load(f)
-    except Exception as e:
-        logger.error(f"Error loading {filename}: {e}")
+    """DEPRECATED: All storage now uses Firestore exclusively
+    Kept for backward compatibility - returns empty dict"""
+    logger.warning(f"load_storage({filename}) called - deprecated, returning empty dict")
     return {}
 
 def save_storage(filename, data):
-    """Save data to JSON file"""
-    try:
-        with open(filename, 'w') as f:
-            json.dump(data, f, indent=2)
-    except Exception as e:
-        logger.error(f"Error saving {filename}: {e}")
+    """DEPRECATED: All storage now uses Firestore exclusively
+    Kept for backward compatibility - no action taken"""
+    logger.warning(f"save_storage({filename}) called - deprecated, no action taken")
+    pass
 
 # OpenAI setup for AI features
 openai_client = None
@@ -416,6 +410,44 @@ def firestore_update_share_link(share_id, updates):
     """Update a share link"""
     return storage_service.update_document('share_links', share_id, updates)
 
+# ============================================================================
+# ESTATE STORAGE FIRESTORE WRAPPERS
+# ============================================================================
+
+def firestore_get_estate(estate_id):
+    """Get an estate from Firestore"""
+    return storage_service.get_document('estates', estate_id)
+
+def firestore_list_user_estates(user_id):
+    """List all estates where user is owner or member"""
+    # Get estates where user is owner
+    owned = storage_service.query_documents(
+        'estates',
+        filters=[('owner_id', '==', user_id)]
+    ) or []
+
+    # Get user to find member estates
+    user = firestore_get_user(user_id)
+    member_estate_ids = user.get('estates', []) if user else []
+
+    # Fetch member estates (not owned)
+    member = []
+    for estate_id in member_estate_ids:
+        estate = firestore_get_estate(estate_id)
+        if estate and estate.get('owner_id') != user_id:
+            member.append(estate)
+
+    return owned + member
+
+def firestore_update_estate(estate_id, updates):
+    """Update an estate"""
+    updates['last_modified'] = datetime.now().isoformat()
+    return storage_service.update_document('estates', estate_id, updates)
+
+def firestore_delete_estate(estate_id):
+    """Delete an estate"""
+    return storage_service.delete_document('estates', estate_id)
+
 # Load existing data (fallback to JSON if Firestore not enabled)
 # inventory_storage removed - now using Firestore exclusively (Phase 2)
 # family_storage removed - now using Firestore exclusively (Phase 3)
@@ -458,13 +490,7 @@ def save_family_storage():
     logger.info("save_family_storage() called - using Firestore directly")
     pass
 
-# Estate storage - multi-user support by estate
-estate_storage = load_storage('estates.json')
-if not estate_storage:
-    estate_storage = {
-        'estates': {},  # estate_id: {name, owner_id, created_at, members: {user_id: {role, joined_at}}}
-        'user_estates': {}  # user_id: [estate_ids] - quick lookup
-    }
+# Estate storage removed - now using Firestore exclusively (Phase 4)
 
 # Email notification storage
 notification_storage = {
@@ -773,15 +799,10 @@ def user_has_estate_access(user_id, estate_id):
     return user_id in members
 
 def save_estate_storage():
-    """Save estate data to file"""
-    try:
-        if os.environ.get('GAE_ENV'):
-            logger.info(f"Estate storage updated (GAE mode): {len(estate_storage.get('estates', {}))} estates")
-        else:
-            with open('estates.json', 'w') as f:
-                json.dump(estate_storage, f, indent=2)
-    except Exception as e:
-        logger.error(f"Failed to save estate storage: {e}")
+    """DEPRECATED: Estate data now saved to Firestore directly.
+    Kept for backward compatibility during migration."""
+    logger.info("save_estate_storage() called - using Firestore directly")
+    pass
 
 # Static file serving
 @app.route('/static/<path:filename>')
@@ -4382,17 +4403,16 @@ def create_estate():
         }
 
         # Save to Firestore
-        storage_service.add_document('estates', estate_id, estate_data)
+        if not storage_service.add_document('estates', estate_id, estate_data):
+            return jsonify({'success': False, 'error': 'Failed to create estate'}), 500
 
-        # Also save to in-memory storage for compatibility
-        estate_storage['estates'][estate_id] = estate_data.copy()
-
-        # Add to user's estate list
-        if user_id not in estate_storage['user_estates']:
-            estate_storage['user_estates'][user_id] = []
-        estate_storage['user_estates'][user_id].append(estate_id)
-
-        save_estate_storage()
+        # Update user's estate list
+        user_doc = firestore_get_user(user_id)
+        if user_doc:
+            estates = user_doc.get('estates', [])
+            if estate_id not in estates:
+                estates.append(estate_id)
+                firestore_update_user(user_id, {'estates': estates})
 
         # Set as current estate (use both for compatibility)
         session['estate_id'] = estate_id
@@ -4433,18 +4453,18 @@ def get_current_estate():
                 'message': 'No estate selected'
             })
         
-        if estate_id not in estate_storage['estates']:
+        # Get estate from Firestore
+        estate = firestore_get_estate(estate_id)
+        if not estate:
             # Clear invalid estate from session
             session.pop('estate_id', None)
+            session.pop('current_estate_id', None)
             return jsonify({
                 'success': True,
                 'estate': None,
                 'message': 'Estate not found'
             })
-        
-        estate = estate_storage['estates'][estate_id].copy()
-        estate['id'] = estate_id
-        
+
         # Add user's role
         user = get_current_user()
         user_id = user.get('id') if user else session.get('user_id')
