@@ -876,11 +876,14 @@ def index():
     """
     authenticated = is_authenticated()
     user_id = session.get('user_id')
-    logger.info(f"Index route accessed: authenticated={authenticated}, user_id={user_id}, session_keys={list(session.keys())}")
+    session_keys = list(session.keys())
+    logger.info(f"Index route accessed: authenticated={authenticated}, user_id={user_id}, session_keys={session_keys}")
 
     if authenticated:
+        logger.info(f"Rendering dashboard for authenticated user {user_id}")
         return render_template('index.html')
     else:
+        logger.info("User not authenticated, showing landing page")
         return render_template('landing.html')
 
 # Debug endpoint protection - only enable in development
@@ -7075,6 +7078,7 @@ def auth_google_callback():
         session.permanent = True  # Make session persistent
         session['user_id'] = user_id
         session['user_email'] = user_data['email']
+        session.modified = True  # Force Flask to commit session before redirect
 
         logger.info(f"Session set for user {user_id}: user_id={session.get('user_id')}, email={session.get('user_email')}")
 
