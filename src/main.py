@@ -24,6 +24,7 @@ from flask import Flask, request, jsonify, render_template, send_from_directory,
 from flask_mail import Mail, Message
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_wtf.csrf import CSRFProtect, generate_csrf
 from werkzeug.utils import secure_filename
 from authlib.integrations.flask_client import OAuth
 from authlib.common.security import generate_token
@@ -76,6 +77,18 @@ limiter = Limiter(
 )
 logger.info("Rate limiting initialized")
 
+# Initialize CSRF Protection
+csrf = CSRFProtect(app)
+logger.info("CSRF protection initialized")
+
+# Configure CSRF to work with JSON APIs
+app.config['WTF_CSRF_CHECK_DEFAULT'] = False  # Don't check by default
+app.config['WTF_CSRF_TIME_LIMIT'] = None      # Tokens don't expire
+app.config['WTF_CSRF_METHODS'] = ['POST', 'PUT', 'DELETE', 'PATCH']
+
+# Exempt OAuth callbacks from CSRF (they use state parameter instead)
+csrf.exempt('auth_google_callback')
+
 # Load environment variables
 load_dotenv()
 
@@ -88,7 +101,8 @@ def get_secret(secret_name):
         project_id = os.environ.get('GOOGLE_CLOUD_PROJECT', 'estateally-ai-services')
         secret_path = f"projects/{project_id}/secrets/{secret_name}/versions/latest"
         response = client.access_secret_version(request={"name": secret_path})
-        return response.payload.data.decode('UTF-8')
+        # Strip whitespace to prevent issues with trailing newlines
+        return response.payload.data.decode('UTF-8').strip()
     except Exception as e:
         logger.error(f"Failed to get secret {secret_name}: {e}")
         return None
@@ -115,21 +129,20 @@ try:
     google_client_secret = os.environ.get('GOOGLE_CLIENT_SECRET') or get_secret('GOOGLE_CLIENT_SECRET') or ''
 
     logger.info(f"Google OAuth credentials loaded: client_id={'present' if google_client_id else 'missing'}, secret={'present' if google_client_secret else 'missing'}")
+    logger.info(f"Client ID length: {len(google_client_id)}, starts with: {google_client_id[:15] if google_client_id else 'N/A'}, ends with: {google_client_id[-15:] if google_client_id else 'N/A'}")
+    logger.info(f"Client Secret length: {len(google_client_secret)}, starts with: {google_client_secret[:10] if google_client_secret else 'N/A'}, ends with: {google_client_secret[-5:] if google_client_secret else 'N/A'}")
 
     if google_client_id and google_client_secret:
         google = oauth.register(
             name='google',
             client_id=google_client_id,
             client_secret=google_client_secret,
-            access_token_url='https://oauth2.googleapis.com/token',
-            authorize_url='https://accounts.google.com/o/oauth2/v2/auth',
-            userinfo_endpoint='https://www.googleapis.com/oauth2/v3/userinfo',
+            server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
             client_kwargs={
-                'scope': 'openid email profile',
-                'token_endpoint_auth_method': 'client_secret_post'
+                'scope': 'openid email profile'
             }
         )
-        logger.info("Google OAuth configured")
+        logger.info("Google OAuth configured successfully")
     else:
         logger.warning("Google OAuth not configured - credentials missing")
 except Exception as e:
@@ -367,53 +380,83 @@ def firestore_update_user(user_id, updates):
         logger.error(f"Failed to update user: {e}")
         return False
 
+# ============================================================================
+# FAMILY STORAGE FIRESTORE WRAPPERS
+# ============================================================================
+
+def firestore_get_family_data(estate_id):
+    """Get family data for an estate from Firestore"""
+    doc_id = f"estate_{estate_id}_family"
+    return storage_service.get_document('family_data', doc_id)
+
+def firestore_save_family_data(estate_id, family_data):
+    """Save family data for an estate to Firestore"""
+    doc_id = f"estate_{estate_id}_family"
+    family_data['estate_id'] = estate_id
+    family_data['id'] = doc_id
+    family_data['last_modified'] = datetime.now().isoformat()
+    return storage_service.add_document('family_data', doc_id, family_data)
+
+def firestore_update_family_data(estate_id, updates):
+    """Update specific fields in family data"""
+    doc_id = f"estate_{estate_id}_family"
+    updates['last_modified'] = datetime.now().isoformat()
+    return storage_service.update_document('family_data', doc_id, updates)
+
+def firestore_add_share_link(share_id, link_data):
+    """Add a share link to Firestore"""
+    link_data['created_at'] = datetime.now().isoformat()
+    return storage_service.add_document('share_links', share_id, link_data)
+
+def firestore_get_share_link(share_id):
+    """Get a share link from Firestore"""
+    return storage_service.get_document('share_links', share_id)
+
+def firestore_update_share_link(share_id, updates):
+    """Update a share link"""
+    return storage_service.update_document('share_links', share_id, updates)
+
 # Load existing data (fallback to JSON if Firestore not enabled)
-inventory_storage = load_storage('inventory.json') if not USE_FIRESTORE else {}
+# inventory_storage removed - now using Firestore exclusively (Phase 2)
+# family_storage removed - now using Firestore exclusively (Phase 3)
 user_storage = load_storage('users.json') if not USE_FIRESTORE else {}
-family_storage = load_storage('family.json') if not USE_FIRESTORE else {}
-if not family_storage or 'estates' not in family_storage:  # Initialize if empty or legacy format
-    family_storage = {
-        'estates': {},  # estate_id: {members, wanted_items, sharing_settings, share_links, assignment_decisions, estate_timeline}
-        'share_links': {}  # share_id: {estate_id, created_at, expires_at, active}
-    }
 
 
 def get_family_estate_data(estate_id: str) -> dict:
-    """Get (or initialize) family sharing data for a specific estate"""
+    """Get (or initialize) family sharing data for estate from Firestore"""
     if not estate_id:
-        raise ValueError("Estate ID is required for family data access")
+        raise ValueError("Estate ID is required")
 
-    if 'estates' not in family_storage:
-        family_storage['estates'] = {}
+    # Try to get from Firestore
+    family_data = firestore_get_family_data(estate_id)
 
-    if estate_id not in family_storage['estates']:
-        family_storage['estates'][estate_id] = {
-            'members': {},  # member_code: {email, name, status, invited_at, last_active}
-            'wanted_items': {},  # member_code: [{item_id, desire_level, priority, wanted_at}]
+    # Initialize if doesn't exist
+    if not family_data:
+        family_data = {
+            'estate_id': estate_id,
+            'members': {},
+            'wanted_items': {},
             'sharing_settings': {
                 'enabled': True,
                 'show_for_sale_only': False,
                 'allow_wanted_tagging': True,
                 'max_members': 25
             },
-            'share_links': {},  # share_id: {created_at, expires_at, active}
+            'share_links': {},
             'assignment_decisions': [],
             'estate_timeline': []
         }
+        firestore_save_family_data(estate_id, family_data)
+        logger.info(f"Initialized family data for estate {estate_id}")
 
-    return family_storage['estates'][estate_id]
+    return family_data
 
 
 def save_family_storage():
-    """Persist family sharing storage to disk (when available)"""
-    try:
-        if os.environ.get('GAE_ENV'):
-            logger.info(f"Family storage updated (GAE mode)")
-        else:
-            with open('family.json', 'w') as f:
-                json.dump(family_storage, f, indent=2)
-    except Exception as e:
-        logger.error(f"Failed to save family storage: {e}")
+    """DEPRECATED: Family data now saved to Firestore directly.
+    Kept for backward compatibility during migration."""
+    logger.info("save_family_storage() called - using Firestore directly")
+    pass
 
 # Estate storage - multi-user support by estate
 estate_storage = load_storage('estates.json')
@@ -613,8 +656,9 @@ def generate_share_link(estate_id: str) -> str:
         'active': True
     }
     estate_data['share_links'][share_id] = link_info
-    family_storage.setdefault('share_links', {})[share_id] = link_info
-    save_family_storage()
+    # Save share link to Firestore
+    firestore_add_share_link(share_id, link_info)
+    firestore_update_family_data(estate_id, {'share_links': estate_data['share_links']})
     return share_id
 
 def get_shared_inventory(share_id):
@@ -636,8 +680,10 @@ def get_shared_inventory(share_id):
     expires_at = datetime.fromisoformat(share_link['expires_at'])
     if datetime.now() > expires_at:
         share_link['active'] = False
-        family_storage['share_links'][share_id]['active'] = False
-        save_family_storage()
+        # Update share link in Firestore
+        firestore_update_share_link(share_id, {'active': False})
+        estate_data['share_links'][share_id]['active'] = False
+        firestore_update_family_data(estate_id, {'share_links': estate_data['share_links']})
         return None
 
     # Filter inventory based on sharing settings
@@ -675,23 +721,44 @@ def get_current_estate_id():
 
 def get_user_estates(user_id):
     """Get all estates a user belongs to"""
-    if user_id not in estate_storage['user_estates']:
-        return []
-    estate_ids = estate_storage['user_estates'][user_id]
-    estates = []
-    for estate_id in estate_ids:
-        if estate_id in estate_storage['estates']:
-            estate = estate_storage['estates'][estate_id].copy()
-            estate['id'] = estate_id
-            # Add user's role in this estate
+    try:
+        # Query Firestore for all estates
+        all_estates = storage_service.list_documents('estates')
+        user_estates = []
+
+        for estate in all_estates:
+            estate_id = estate.get('id')
+            # Check if user is owner
+            if estate.get('owner_id') == user_id:
+                estate['user_role'] = 'owner'
+                user_estates.append(estate)
+            # Check if user is a member
+            elif user_id in estate.get('members', {}):
+                member_data = estate['members'][user_id]
+                estate['user_role'] = member_data.get('role', 'member')
+                user_estates.append(estate)
+
+        return user_estates
+    except Exception as e:
+        logger.error(f"Error getting user estates from Firestore: {e}")
+        # Fallback to in-memory storage
+        if user_id not in estate_storage['user_estates']:
+            return []
+        estate_ids = estate_storage['user_estates'][user_id]
+        estates = []
+        for estate_id in estate_ids:
             if estate_id in estate_storage['estates']:
-                members = estate_storage['estates'][estate_id].get('members', {})
-                if user_id in members:
-                    estate['user_role'] = members[user_id].get('role', 'member')
-                elif estate_storage['estates'][estate_id].get('owner_id') == user_id:
-                    estate['user_role'] = 'owner'
-            estates.append(estate)
-    return estates
+                estate = estate_storage['estates'][estate_id].copy()
+                estate['id'] = estate_id
+                # Add user's role in this estate
+                if estate_id in estate_storage['estates']:
+                    members = estate_storage['estates'][estate_id].get('members', {})
+                    if user_id in members:
+                        estate['user_role'] = members[user_id].get('role', 'member')
+                    elif estate_storage['estates'][estate_id].get('owner_id') == user_id:
+                        estate['user_role'] = 'owner'
+                estates.append(estate)
+        return estates
 
 def user_has_estate_access(user_id, estate_id):
     """Check if user has access to an estate"""
@@ -734,12 +801,13 @@ def redirect_custom_domain_for_oauth():
         if request.host == 'myestateally.com':
             return redirect(f'https://www.myestateally.com{request.path}', code=301)
 
-        # Redirect OAuth endpoints to appspot until custom domain OAuth is configured
-        if request.path.startswith('/auth/google'):
-            appspot_url = f'https://estateally-ai-services.ue.r.appspot.com{request.path}'
-            if request.query_string:
-                appspot_url += f'?{request.query_string.decode()}'
-            return redirect(appspot_url, code=302)
+        # OAuth is now configured for custom domain - no redirect needed
+        # Commenting out redirect to allow OAuth to work on myestateally.com
+        # if request.path.startswith('/auth/google'):
+        #     appspot_url = f'https://estateally-ai-services.ue.r.appspot.com{request.path}'
+        #     if request.query_string:
+        #         appspot_url += f'?{request.query_string.decode()}'
+        #     return redirect(appspot_url, code=302)
 
 @app.before_request
 def enforce_authentication():
@@ -766,6 +834,17 @@ def enforce_authentication():
         if request.path.startswith('/api/'):
             return jsonify({'success': False, 'error': 'Authentication required'}), 401
         return render_template('auth_required.html'), 401
+
+@app.after_request
+def set_security_headers(response):
+    """Add security headers to all responses"""
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    # Only add HSTS in production (when using HTTPS)
+    if request.is_secure:
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    return response
 
 # Main routes
 @app.route('/')
@@ -961,94 +1040,28 @@ def get_items():
                 'message': 'No estate selected'
             })
         
-        # Try Firestore first (only if available)
-        try:
-            items = firestore_list_inventory_items()
-            if items is not None:
-                # Filter by estate_id - ALSO include items with no estate (orphaned mobile uploads)
-                items = [item for item in items if item.get('estate_id') == estate_id or item.get('estate_id') is None]
+        # Use query for better performance (filter at database level)
+        items = storage_service.query_documents(
+            'inventory',
+            filters=[('estate_id', '==', estate_id)]
+        )
 
-                # Auto-assign orphaned items to current estate
-                for item in items:
-                    if item.get('estate_id') is None:
-                        logger.info(f"Auto-assigning orphaned item {item.get('id')} to estate {estate_id}")
-                        item['estate_id'] = estate_id
-                        # Update in Firestore
-                        firestore_update_inventory_item(item.get('id'), {'estate_id': estate_id})
+        if items is None:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to fetch items from database'
+            }), 500
 
-                logger.info(f"Found {len(items)} items from Firestore for estate {estate_id}")
-                return jsonify({
-                    'success': True,
-                    'items': items
-                })
-        except Exception as firestore_error:
-            logger.warning(f"Firestore unavailable: {firestore_error}")
-        
-        # Check in-memory storage first (since it's the most current)
-        in_memory_items = list(inventory_storage.values())
-        # Filter by estate_id - ALSO include orphaned items
-        in_memory_items = [item for item in in_memory_items if item.get('estate_id') == estate_id or item.get('estate_id') is None]
-
-        # Auto-assign orphaned items to current estate
-        for item in in_memory_items:
-            if item.get('estate_id') is None:
-                logger.info(f"Auto-assigning orphaned item {item.get('id')} to estate {estate_id}")
-                item['estate_id'] = estate_id
-                inventory_storage[item.get('id')] = item  # Update in-memory
-
-        logger.info(f"In-memory storage has {len(in_memory_items)} items for estate {estate_id}")
-        
-        # Fall back to JSON file storage if in-memory is empty
-        if len(in_memory_items) == 0:
-            try:
-                fresh_storage = load_storage('inventory.json')
-                items = list(fresh_storage.values())
-                # Filter by estate_id - ALSO include orphaned items
-                items = [item for item in items if item.get('estate_id') == estate_id or item.get('estate_id') is None]
-
-                # Auto-assign orphaned items to current estate
-                for item in items:
-                    if item.get('estate_id') is None:
-                        logger.info(f"Auto-assigning orphaned item {item.get('id')} to estate {estate_id}")
-                        item['estate_id'] = estate_id
-                        fresh_storage[item.get('id')] = item
-
-                # Save updated storage
-                if any(item.get('estate_id') == estate_id for item in items if item.get('uploadSource') == 'mobile'):
-                    save_storage('inventory.json', fresh_storage)
-                
-                # Fix any items with broken image URLs and use base64 data when available
-                for item in items:
-                    if item.get('photo', '').startswith('/uploads/'):
-                        # If we have base64 data, use it; otherwise use placeholder
-                        if item.get('photo_data'):
-                            item['photo'] = f"data:image/jpeg;base64,{item['photo_data']}"
-                        else:
-                            item['photo'] = '/static/placeholder-image.png'
-                
-                logger.info(f"Found {len(items)} items from JSON storage (fallback) for estate {estate_id}")
-                
-                return jsonify({
-                    'success': True,
-                    'items': items
-                })
-            except Exception as json_error:
-                logger.error(f"JSON storage error: {json_error}")
-        
-        # Use in-memory storage (most current)
-        items = in_memory_items
-        
-        # Fix any items with broken image URLs and use base64 data when available
+        # Fix image URLs for display
         for item in items:
             if item.get('photo', '').startswith('/uploads/'):
-                # If we have base64 data, use it; otherwise use placeholder
                 if item.get('photo_data'):
                     item['photo'] = f"data:image/jpeg;base64,{item['photo_data']}"
                 else:
                     item['photo'] = '/static/placeholder-image.png'
-        
-        logger.info(f"Found {len(items)} items from in-memory storage")
-        
+
+        logger.info(f"Found {len(items)} items from Firestore for estate {estate_id}")
+
         return jsonify({
             'success': True,
             'items': items
@@ -1062,6 +1075,7 @@ def get_items():
 
 @app.route('/api/items', methods=['POST'])
 @require_auth
+@limiter.limit("50 per hour")
 def add_item():
     """Add a new inventory item to the current estate"""
     try:
@@ -1120,10 +1134,13 @@ def add_item():
             'lastModified': datetime.now().isoformat()
         }
         
-        # Prefer Firestore; fall back to JSON file
+        # Save to Firestore
         if not firestore_add_inventory_item(item):
-            inventory_storage[item_id] = item
-            save_storage('inventory.json', inventory_storage)
+            logger.error(f"Failed to add item {item_id} to Firestore")
+            return jsonify({
+                'success': False,
+                'error': 'Failed to save item to database'
+            }), 500
 
         # Log activity
         user_email = session.get('user_email', 'Unknown')
@@ -1151,6 +1168,7 @@ def add_item():
 
 @app.route('/api/items/<item_id>', methods=['PUT'])
 @require_auth
+@limiter.limit("50 per hour")
 def update_item(item_id):
     """Update an existing inventory item"""
     try:
@@ -1166,55 +1184,36 @@ def update_item(item_id):
 
         data = request.get_json()
 
-        # Check if item exists in in-memory storage
-        if item_id not in inventory_storage:
-            # Try to load from JSON storage
-            try:
-                fresh_storage = load_storage('inventory.json')
-                if item_id not in fresh_storage:
-                    return jsonify({
-                        'success': False,
-                        'error': 'Item not found'
-                    }), 404
-                inventory_storage[item_id] = fresh_storage[item_id]
-            except:
-                return jsonify({
-                    'success': False,
-                    'error': 'Item not found'
-                }), 404
-        
-        # Update the item
-        item = inventory_storage[item_id]
+        # Get existing item from Firestore
+        existing_item = firestore_get_inventory_item(item_id)
+        if not existing_item:
+            return jsonify({'success': False, 'error': 'Item not found'}), 404
+
+        # Verify estate ownership
+        if existing_item.get('estate_id') != estate_id:
+            return jsonify({'success': False, 'error': 'Item not found'}), 404
+
+        # Update fields
+        item = existing_item.copy()
         item['name'] = data.get('name', item['name'])
         item['category'] = data.get('category', item['category'])
-        item['description'] = data.get('description', item['description'])
-        item['estimatedValue'] = float(data.get('estimatedValue', item['estimatedValue']))
-        item['forSale'] = data.get('forSale', item['forSale'])
-        item['assignedTo'] = data.get('assignedTo', item['assignedTo'])
+        item['description'] = data.get('description', item.get('description', ''))
+        item['estimatedValue'] = float(data.get('estimatedValue', item.get('estimatedValue', 0)))
+        item['forSale'] = data.get('forSale', item.get('forSale', False))
+        item['assignedTo'] = data.get('assignedTo', item.get('assignedTo'))
         item['lastModified'] = datetime.now().isoformat()
-        
-        # Handle photo update (if provided as base64)
+
+        # Handle photo update
         if 'photo_data' in data:
             item['photo_data'] = data['photo_data']
             item['photo'] = f"data:image/jpeg;base64,{data['photo_data']}"
         elif 'photo' in data:
             item['photo'] = data['photo']
-        
-        # Try Firestore first; fall back to in-memory storage
-        try:
-            firestore_success = firestore_update_inventory_item(item)
-            if firestore_success:
-                logger.info(f"Item {item_id} updated in Firestore")
-            else:
-                # Fall back to in-memory storage
-                inventory_storage[item_id] = item
-                save_storage('inventory.json', inventory_storage)
-                logger.info(f"Item {item_id} updated in storage")
-        except Exception as storage_error:
-            logger.warning(f"Storage error: {storage_error}")
-            # Fall back to in-memory storage
-            inventory_storage[item_id] = item
-            logger.info(f"Item {item_id} updated in in-memory storage")
+
+        # Save to Firestore
+        if not firestore_update_inventory_item(item):
+            logger.error(f"Failed to update item {item_id}")
+            return jsonify({'success': False, 'error': 'Failed to update item'}), 500
 
         # Log activity
         user_email = session.get('user_email', 'Unknown')
@@ -1242,6 +1241,7 @@ def update_item(item_id):
 
 @app.route('/api/items/<item_id>', methods=['DELETE'])
 @require_auth
+@limiter.limit("50 per hour")
 def delete_item(item_id):
     """Delete an inventory item"""
     try:
@@ -1255,44 +1255,21 @@ def delete_item(item_id):
                 'error': 'Only the estate owner can delete items'
             }), 403
 
-        # Check if item exists in in-memory storage
-        if item_id not in inventory_storage:
-            # Try to load from JSON storage
-            try:
-                fresh_storage = load_storage('inventory.json')
-                if item_id not in fresh_storage:
-                    return jsonify({
-                        'success': False,
-                        'error': 'Item not found'
-                    }), 404
-                inventory_storage[item_id] = fresh_storage[item_id]
-            except:
-                return jsonify({
-                    'success': False,
-                    'error': 'Item not found'
-                }), 404
+        # Get item from Firestore
+        item = firestore_get_inventory_item(item_id)
+        if not item:
+            return jsonify({'success': False, 'error': 'Item not found'}), 404
 
-        # Save item name before deleting for activity log
-        item_name = inventory_storage[item_id].get('name', 'Unknown')
+        # Verify estate ownership
+        if item.get('estate_id') != estate_id:
+            return jsonify({'success': False, 'error': 'Item not found'}), 404
 
-        # Delete from storage
-        try:
-            # Try Firestore first
-            firestore_success = firestore_delete_inventory_item(item_id)
-            if firestore_success:
-                logger.info(f"Item {item_id} deleted from Firestore")
-            else:
-                # Fall back to in-memory storage
-                if item_id in inventory_storage:
-                    del inventory_storage[item_id]
-                    save_storage('inventory.json', inventory_storage)
-                    logger.info(f"Item {item_id} deleted from storage")
-        except Exception as storage_error:
-            logger.warning(f"Storage error: {storage_error}")
-            # Fall back to in-memory storage
-            if item_id in inventory_storage:
-                del inventory_storage[item_id]
-                logger.info(f"Item {item_id} deleted from in-memory storage")
+        item_name = item.get('name', 'Unknown')
+
+        # Delete from Firestore
+        if not firestore_delete_inventory_item(item_id):
+            logger.error(f"Failed to delete item {item_id}")
+            return jsonify({'success': False, 'error': 'Failed to delete item'}), 500
 
         # Log activity
         user_email = session.get('user_email', 'Unknown')
@@ -1396,8 +1373,178 @@ Format your response as JSON with these fields:
         logger.error(f"AI analysis error: {e}")
         return None
 
+def analyze_uploaded_photo_with_ai(image_data):
+    """Use OpenAI Vision API to identify and analyze an uploaded photo"""
+    try:
+        # Get OpenAI API key from environment
+        api_key = os.environ.get('OPENAI_API_KEY')
+
+        if not api_key:
+            logger.error("OPENAI_API_KEY environment variable not set")
+            return {
+                'item_name': 'Uploaded Item',
+                'category': 'General',
+                'description': 'AI service not configured. Please edit details manually.',
+                'estimated_value_min': 0,
+                'estimated_value_max': 0,
+                'confidence': 0.0
+            }
+
+        if not api_key.startswith('sk-'):
+            logger.error("OPENAI_API_KEY does not appear to be valid (should start with 'sk-')")
+            return {
+                'item_name': 'Uploaded Item',
+                'category': 'General',
+                'description': 'AI service misconfigured. Please edit details manually.',
+                'estimated_value_min': 0,
+                'estimated_value_max': 0,
+                'confidence': 0.0
+            }
+
+        # Prepare the image data
+        if not image_data:
+            logger.warning("No image data provided for AI analysis")
+            return {
+                'item_name': 'Uploaded Item',
+                'category': 'General',
+                'description': 'No image data provided.',
+                'estimated_value_min': 0,
+                'estimated_value_max': 0,
+                'confidence': 0.0
+            }
+
+        # Handle different image data formats
+        image_url = None
+        if isinstance(image_data, str):
+            if image_data.startswith('data:image'):
+                # Data URL format
+                image_url = image_data
+            elif image_data.startswith('http'):
+                # HTTP URL format
+                image_url = image_data
+            else:
+                # Assume it's base64 without the data URL prefix
+                image_url = f"data:image/jpeg;base64,{image_data}"
+
+        if not image_url:
+            logger.error("Could not format image data for AI analysis")
+            return {
+                'item_name': 'Uploaded Item',
+                'category': 'General',
+                'description': 'Image format not supported.',
+                'estimated_value_min': 0,
+                'estimated_value_max': 0,
+                'confidence': 0.0
+            }
+
+        # Create a detailed prompt for item identification
+        prompt = """You are analyzing a photo to help catalog items in an estate inventory. Be thorough and specific.
+
+Carefully examine this photo and identify the item with as much detail as possible:
+
+1. ITEM NAME: Identify the specific item type. If you can see a brand, model, or distinguishing features, include them. Examples:
+   - "Vintage Singer Sewing Machine Model 66"
+   - "IKEA Poäng Armchair with Brown Cushion"
+   - "Antique Oak Roll-Top Desk"
+   - "Apple iPhone 12 Pro (Blue)"
+
+2. CATEGORY: Choose the most specific category from this list:
+   Furniture, Electronics, Jewelry, Collectibles, Clothing, Art, Books, Kitchenware, Tools, Sports Equipment, Toys, Musical Instruments, Antiques, Other
+
+3. DESCRIPTION: Write 2-4 sentences describing:
+   - Physical condition (excellent, good, fair, worn, damaged)
+   - Notable features, markings, or distinguishing characteristics
+   - Approximate age or era if visible
+   - Material or construction details
+   - Any visible brand names, model numbers, or labels
+
+4. ESTIMATED RESALE VALUE: Provide a realistic market value range in USD based on:
+   - Item condition
+   - Brand reputation and rarity
+   - Current market demand
+   - Comparable recent sales
+
+5. CONFIDENCE: Rate your identification confidence from 0 to 1:
+   - 0.9-1.0: Very confident - clear branding, distinctive features visible
+   - 0.7-0.9: Confident - can identify item type and general characteristics
+   - 0.5-0.7: Moderate - item type is clear but specifics are uncertain
+   - 0.3-0.5: Low - image quality or angle makes identification difficult
+   - 0.0-0.3: Very uncertain - need better photo or multiple angles
+
+Be honest about uncertainty. If details are unclear, say so in the description and reflect it in your confidence score.
+
+Format your response as JSON with these exact fields:
+{
+  "item_name": "string",
+  "category": "string",
+  "description": "string",
+  "estimated_value_min": number,
+  "estimated_value_max": number,
+  "confidence": number
+}"""
+
+        # Call OpenAI API with vision
+        client = OpenAI(api_key=api_key)
+
+        messages = [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": image_url}}
+            ]
+        }]
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            max_tokens=500,
+            response_format={"type": "json_object"}
+        )
+
+        ai_result = json.loads(response.choices[0].message.content)
+        logger.info(f"AI photo analysis completed: {ai_result.get('item_name', 'Unknown')}")
+
+        # Ensure all required fields are present
+        result = {
+            'item_name': ai_result.get('item_name', 'Uploaded Item'),
+            'category': ai_result.get('category', 'General'),
+            'description': ai_result.get('description', 'Item uploaded successfully.'),
+            'estimated_value_min': ai_result.get('estimated_value_min', 0),
+            'estimated_value_max': ai_result.get('estimated_value_max', 0),
+            'confidence': ai_result.get('confidence', 0.5)
+        }
+
+        return result
+
+    except json.JSONDecodeError as e:
+        logger.error(f"AI photo analysis - JSON parsing error: {e}")
+        try:
+            logger.error(f"Raw response: {response.choices[0].message.content[:500]}")
+        except:
+            pass
+        return {
+            'item_name': 'Uploaded Item',
+            'category': 'General',
+            'description': 'AI response could not be parsed. Please edit details manually.',
+            'estimated_value_min': 0,
+            'estimated_value_max': 0,
+            'confidence': 0.0
+        }
+    except Exception as e:
+        logger.error(f"AI photo analysis error: {e}", exc_info=True)
+        logger.error(f"Image data size: {len(str(image_data))} chars")
+        return {
+            'item_name': 'Uploaded Item',
+            'category': 'General',
+            'description': f'Item identification failed: {str(e)[:100]}. Please edit details manually.',
+            'estimated_value_min': 0,
+            'estimated_value_max': 0,
+            'confidence': 0.0
+        }
+
 @app.route('/api/pricing/lookup', methods=['POST'])
 @require_auth
+@limiter.limit("30 per hour")
 def pricing_lookup():
     """AI-powered pricing lookup across multiple platforms"""
     try:
@@ -1728,6 +1875,7 @@ def get_documents():
 
 @app.route('/api/documents/upload', methods=['POST'])
 @require_auth
+@limiter.limit("20 per hour")
 def upload_document():
     """Upload a document to Cloud Storage"""
     try:
@@ -2117,6 +2265,7 @@ def debug_email_status():
 
 @app.route('/api/hero/upload', methods=['POST'])
 @require_auth
+@limiter.limit("20 per hour")
 def hero_upload():
     """Handle photo upload and AI analysis"""
     try:
@@ -2139,21 +2288,83 @@ def hero_upload():
         os.makedirs(upload_dir, exist_ok=True)
         file_path = os.path.join(upload_dir, filename)
         file.save(file_path)
-        
-        # Mock AI analysis (replace with actual AI service)
+
+        # Compress image and convert to base64 for AI analysis
+        import os as os_module
+        original_size_kb = os_module.path.getsize(file_path) / 1024
+        logger.info(f"Compressing image for AI analysis: {filename} (original: {original_size_kb:.1f}KB)")
+        image_base64 = compress_image_to_base64(file_path, max_size_kb=800)
+        compressed_size_kb = len(image_base64) * 3 / 4 / 1024  # Approximate base64 size
+        logger.info(f"Image compressed: {original_size_kb:.1f}KB → {compressed_size_kb:.1f}KB")
+
+        # Perform AI analysis on the uploaded photo
+        logger.info(f"Starting AI analysis for: {filename}")
+        import time
+        start_time = time.time()
+        ai_analysis = analyze_uploaded_photo_with_ai(image_base64)
+        analysis_time = time.time() - start_time
+
+        confidence = ai_analysis.get('confidence', 0)
+        logger.info(f"AI analysis complete in {analysis_time:.2f}s: {ai_analysis.get('item_name', 'Unknown')} (confidence: {confidence:.2f})")
+
+        if confidence < 0.5:
+            logger.warning(f"Low confidence identification ({confidence:.2f}): {ai_analysis.get('item_name', 'Unknown')}")
+
+        # Prepare result with photo URL
         ai_result = {
-            'item_name': 'Vintage Calculator',
-            'category': 'Electronics',
-            'description': 'A vintage Texas Instruments calculator in good condition. Features scientific functions and appears to be from the 1980s.',
-            'estimated_value_min': 25,
-            'estimated_value_max': 75,
-            'confidence': 0.85,
+            'item_name': ai_analysis['item_name'],
+            'category': ai_analysis['category'],
+            'description': ai_analysis['description'],
+            'estimated_value_min': ai_analysis['estimated_value_min'],
+            'estimated_value_max': ai_analysis['estimated_value_max'],
+            'confidence': ai_analysis['confidence'],
             'photo_url': f'/static/uploads/{filename}'
         }
-        
+
+        # Automatically create the inventory item
+        user = get_current_user()
+        estate_id = get_current_estate_id()
+
+        if not estate_id:
+            return jsonify({
+                'success': False,
+                'error': 'No estate selected'
+            }), 400
+
+        # Create the item
+        item_id = str(uuid.uuid4())
+        avg_value = (ai_result['estimated_value_min'] + ai_result['estimated_value_max']) / 2
+
+        item = {
+            'id': item_id,
+            'name': ai_result['item_name'],
+            'category': ai_result['category'],
+            'description': ai_result['description'],
+            'value': avg_value,
+            'photo': ai_result['photo_url'],
+            'location': '',
+            'assigned_to': '',
+            'estate_id': estate_id,
+            'created_at': datetime.now().isoformat(),
+            'created_by': user.get('email', 'Unknown'),
+            'upload_source': 'mobile'
+        }
+
+        # Save to Firestore
+        storage_service.add_document('inventory', item_id, item)
+        logger.info(f"Item created from hero upload: {item_id} - {item['name']}")
+
+        # Log activity
+        log_activity(estate_id, user.get('email', 'Unknown'), 'added', item_id, item['name'], {
+            'category': item['category'],
+            'value': item['value']
+        })
+
         return jsonify({
             'success': True,
-            'analysis': ai_result
+            'analysis': ai_result,
+            'item': item,
+            'message': 'Item added to inventory successfully'
         })
         
     except Exception as e:
@@ -2165,6 +2376,7 @@ def hero_upload():
 
 @app.route('/api/qr/generate', methods=['POST'])
 @require_auth
+@limiter.limit("20 per hour")
 def generate_qr():
     """Generate QR code for mobile upload"""
     try:
@@ -2268,7 +2480,7 @@ def mobile_upload_api():
             # Continue without file save for now
             file_path = None
         
-        # Mock AI analysis (replace with actual AI service)
+        # Real AI analysis with OpenAI Vision API
         try:
             # Compress and convert uploaded image to base64 for storage
             photo_data = None
@@ -2281,24 +2493,55 @@ def mobile_upload_api():
 
                     size_kb = len(photo_data) / 1024
                     logger.info(f"Image compressed to base64, size: {size_kb:.2f}KB ({len(photo_data)} chars)")
+
+                    # Perform AI analysis on the uploaded photo
+                    logger.info(f"Starting AI analysis for mobile upload: {filename}")
+                    import time
+                    start_time = time.time()
+                    ai_analysis = analyze_uploaded_photo_with_ai(photo_data)
+                    analysis_time = time.time() - start_time
+
+                    confidence = ai_analysis.get('confidence', 0)
+                    logger.info(f"AI analysis complete in {analysis_time:.2f}s: {ai_analysis.get('item_name', 'Unknown')} (confidence: {confidence:.2f})")
+
+                    if confidence < 0.5:
+                        logger.warning(f"Low confidence mobile identification ({confidence:.2f}): {ai_analysis.get('item_name', 'Unknown')}")
+
                 except Exception as img_error:
-                    logger.error(f"Image compression error: {img_error}")
+                    logger.error(f"Image compression or AI analysis error: {img_error}")
                     photo_url = '/static/placeholder-image.png'
+                    # Use fallback if AI fails
+                    ai_analysis = {
+                        'item_name': 'Mobile Uploaded Item',
+                        'category': 'General',
+                        'description': 'Item uploaded from mobile device via QR code.',
+                        'estimated_value_min': 10,
+                        'estimated_value_max': 50,
+                        'confidence': 0.0
+                    }
             else:
                 photo_url = '/static/placeholder-image.png'
-            
+                ai_analysis = {
+                    'item_name': 'Mobile Uploaded Item',
+                    'category': 'General',
+                    'description': 'Item uploaded from mobile device.',
+                    'estimated_value_min': 0,
+                    'estimated_value_max': 0,
+                    'confidence': 0.0
+                }
+
             ai_result = {
-                'item_name': 'Mobile Uploaded Item',
-                'category': 'General',
-                'description': 'Item uploaded from mobile device via QR code.',
-                'estimated_value_min': 10,
-                'estimated_value_max': 50,
-                'confidence': 0.75,
+                'item_name': ai_analysis['item_name'],
+                'category': ai_analysis['category'],
+                'description': ai_analysis['description'],
+                'estimated_value_min': ai_analysis['estimated_value_min'],
+                'estimated_value_max': ai_analysis['estimated_value_max'],
+                'confidence': ai_analysis['confidence'],
                 'photo_url': photo_url,
                 'photo_data': photo_data,  # Store base64 data for persistence
                 'session_id': session_id
             }
-            logger.info(f"AI result created: {ai_result}")
+            logger.info(f"AI result created: {ai_result['item_name']} (confidence: {ai_result['confidence']})")
         except Exception as ai_error:
             logger.error(f"AI result creation error: {ai_error}")
             return jsonify({
@@ -2439,6 +2682,7 @@ def uploaded_file(filename):
 # Family Sharing API Routes
 @app.route('/api/family/invite', methods=['POST'])
 @require_auth
+@limiter.limit("10 per hour")
 def invite_family_member():
     """Invite a family member to the current estate"""
     try:
@@ -2496,16 +2740,11 @@ def invite_family_member():
             expires_at = datetime.fromisoformat(link['expires_at'])
             if link.get('active', True) and datetime.now() < expires_at:
                 share_id = sid
-                family_storage['share_links'][sid] = link
                 break
 
         if not share_id:
             share_id = generate_share_link(estate_id)
-        else:
-            save_family_storage()
-
-        # Persist updates (if not already saved)
-        save_family_storage()
+        # Data already persisted by generate_share_link or get_family_estate_data
 
         return jsonify({
             'success': True,
@@ -2531,7 +2770,7 @@ def get_user_role_in_estate(user_id, estate_id):
         # Check if user is the estate owner
         estates = storage_service.list_documents('estates')
         for estate in estates:
-            if estate.get('id') == estate_id and estate.get('user_id') == user_id:
+            if estate.get('id') == estate_id and estate.get('owner_id') == user_id:
                 return 'owner'  # Estate owner has full control
 
         # Check family member role
@@ -2637,8 +2876,8 @@ def update_member_role(member_code):
         # Update role
         estate_data['members'][member_code]['role'] = new_role
 
-        # Save changes
-        save_family_storage()
+        # Save changes to Firestore
+        firestore_update_family_data(estate_id, {'members': estate_data['members']})
 
         return jsonify({
             'success': True,
@@ -2672,8 +2911,10 @@ def want_item(share_id):
         expires_at = datetime.fromisoformat(share_link['expires_at'])
         if datetime.now() > expires_at:
             share_link['active'] = False
-            family_storage['share_links'][share_id]['active'] = False
-            save_family_storage()
+            # Update share link in Firestore
+            firestore_update_share_link(share_id, {'active': False})
+            estate_data['share_links'][share_id]['active'] = False
+            firestore_update_family_data(estate_id, {'share_links': estate_data['share_links']})
             return jsonify({'success': False, 'error': 'Share link expired'}), 403
 
         data = request.get_json()
@@ -2736,7 +2977,11 @@ def want_item(share_id):
         estate_data['members'][member_code]['last_active'] = datetime.now().isoformat()
         estate_data['members'][member_code]['status'] = 'active'
 
-        save_family_storage()
+        # Save changes to Firestore
+        firestore_update_family_data(estate_id, {
+            'wanted_items': estate_data['wanted_items'],
+            'members': estate_data['members']
+        })
 
         return jsonify({
             'success': True,
@@ -2828,7 +3073,8 @@ def family_settings():
         if 'allow_wanted_tagging' in data:
             estate_data['sharing_settings']['allow_wanted_tagging'] = bool(data['allow_wanted_tagging'])
 
-        save_family_storage()
+        # Save changes to Firestore
+        firestore_update_family_data(estate_id, {'sharing_settings': estate_data['sharing_settings']})
 
         return jsonify({
             'success': True,
@@ -2991,6 +3237,7 @@ def verify_mfa():
 
 # MFA setup verification endpoint
 @app.route('/api/auth/verify-mfa-setup', methods=['POST'])
+@limiter.limit("5 per minute")
 def verify_mfa_setup():
     """Verify MFA setup during account creation"""
     try:
@@ -3360,6 +3607,7 @@ def facebook_auth():
         }), 500
 
 @app.route('/api/auth/demo', methods=['POST'])
+@limiter.limit("5 per hour")
 def demo_login():
     """Create a demo user session"""
     try:
@@ -3440,6 +3688,485 @@ def verify_session():
         return jsonify({
             'success': False,
             'error': 'Session verification failed'
+        }), 500
+
+@app.route('/api/csrf-token', methods=['GET'])
+def get_csrf_token():
+    """Get CSRF token for client-side requests"""
+    return jsonify({
+        'success': True,
+        'csrf_token': generate_csrf()
+    })
+
+# ===== USER PROFILE MANAGEMENT ENDPOINTS =====
+
+@app.route('/api/user/profile', methods=['GET'])
+@require_auth
+def get_user_profile():
+    """Get current user profile information"""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        # Return safe user data (exclude sensitive fields)
+        return jsonify({
+            'success': True,
+            'user': {
+                'id': user['id'],
+                'email': user['email'],
+                'name': user['name'],
+                'provider': user.get('provider', 'email'),
+                'account_type': user.get('account_type', 'free'),
+                'grandfathered': user.get('grandfathered', False),
+                'created_at': user.get('created_at', ''),
+                'last_login': user.get('last_login', ''),
+                'mfa_enabled': user.get('mfa_enabled', False)
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error fetching user profile: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to load profile'
+        }), 500
+
+@app.route('/api/user/profile', methods=['PUT'])
+@require_auth
+@limiter.limit("10 per minute")
+def update_user_profile():
+    """Update user profile information"""
+    try:
+        data = request.get_json()
+        user = get_current_user()
+
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        # Only allow updating name
+        if 'name' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'No updates provided'
+            }), 400
+
+        new_name = sanitize_string(data['name'], max_length=100)
+
+        if not new_name or len(new_name) < 2:
+            return jsonify({
+                'success': False,
+                'error': 'Name must be at least 2 characters'
+            }), 400
+
+        # Update user
+        user_id = session['user_id']
+        if USE_FIRESTORE:
+            firestore_update_user(user_id, {'name': new_name})
+        else:
+            auth_storage['users'][user_id]['name'] = new_name
+            save_auth_storage()
+
+        return jsonify({
+            'success': True,
+            'message': 'Profile updated successfully',
+            'user': {
+                'id': user_id,
+                'name': new_name,
+                'email': user['email']
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Error updating profile: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to update profile'
+        }), 500
+
+@app.route('/api/user/change-password', methods=['POST'])
+@require_auth
+@limiter.limit("5 per minute")
+def change_password():
+    """Change user password"""
+    try:
+        data = request.get_json()
+        user = get_current_user()
+
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        # Only allow for email/password users
+        if user.get('provider') != 'email':
+            return jsonify({
+                'success': False,
+                'error': 'Password change not available for OAuth accounts'
+            }), 400
+
+        # Validate required fields
+        valid, error = validate_required_fields(data, ['current_password', 'new_password'])
+        if not valid:
+            return jsonify({'success': False, 'error': error}), 400
+
+        current_password = data['current_password']
+        new_password = data['new_password']
+
+        # Verify current password
+        if not verify_password(current_password, user.get('password_hash', '')):
+            return jsonify({
+                'success': False,
+                'error': 'Current password is incorrect'
+            }), 401
+
+        # Validate new password
+        if len(new_password) < 8:
+            return jsonify({
+                'success': False,
+                'error': 'New password must be at least 8 characters'
+            }), 400
+
+        if len(new_password) > 128:
+            return jsonify({
+                'success': False,
+                'error': 'Password too long'
+            }), 400
+
+        # Hash new password
+        new_password_hash = hash_password(new_password)
+
+        # Update password
+        user_id = session['user_id']
+        if USE_FIRESTORE:
+            firestore_update_user(user_id, {'password_hash': new_password_hash})
+        else:
+            auth_storage['users'][user_id]['password_hash'] = new_password_hash
+            save_auth_storage()
+
+        return jsonify({
+            'success': True,
+            'message': 'Password changed successfully'
+        })
+
+    except Exception as e:
+        logger.error(f"Error changing password: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to change password'
+        }), 500
+
+@app.route('/api/user/toggle-mfa', methods=['POST'])
+@require_auth
+@limiter.limit("5 per minute")
+def toggle_mfa():
+    """Enable or disable MFA for user account"""
+    try:
+        import pyotp
+        import qrcode
+        import io
+        import base64
+
+        data = request.get_json()
+        user = get_current_user()
+
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        action = data.get('action')  # 'enable' or 'disable' or 'verify_enable'
+
+        if action == 'enable':
+            # Generate MFA secret
+            mfa_secret = pyotp.random_base32()
+
+            # Generate QR code
+            totp = pyotp.TOTP(mfa_secret)
+            provisioning_uri = totp.provisioning_uri(
+                name=user['email'],
+                issuer_name='MyEstateAlly'
+            )
+
+            qr = qrcode.QRCode(version=1, box_size=10, border=4)
+            qr.add_data(provisioning_uri)
+            qr.make(fit=True)
+            img = qr.make_image(fill_color="black", back_color="white")
+
+            # Convert to base64
+            buffer = io.BytesIO()
+            img.save(buffer, format='PNG')
+            qr_code_base64 = base64.b64encode(buffer.getvalue()).decode()
+
+            return jsonify({
+                'success': True,
+                'action': 'setup',
+                'mfa_secret': mfa_secret,
+                'qr_code': f'data:image/png;base64,{qr_code_base64}',
+                'message': 'Scan QR code with your authenticator app'
+            })
+
+        elif action == 'verify_enable':
+            # Verify MFA code before enabling
+            mfa_secret = data.get('mfa_secret')
+            verification_code = data.get('code')
+
+            if not mfa_secret or not verification_code:
+                return jsonify({
+                    'success': False,
+                    'error': 'Missing verification data'
+                }), 400
+
+            totp = pyotp.TOTP(mfa_secret)
+            if not totp.verify(verification_code, valid_window=1):
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid verification code'
+                }), 400
+
+            # Enable MFA
+            user_id = session['user_id']
+            if USE_FIRESTORE:
+                firestore_update_user(user_id, {
+                    'mfa_enabled': True,
+                    'mfa_secret': mfa_secret
+                })
+            else:
+                auth_storage['users'][user_id]['mfa_enabled'] = True
+                auth_storage['users'][user_id]['mfa_secret'] = mfa_secret
+                save_auth_storage()
+
+            return jsonify({
+                'success': True,
+                'message': 'Two-factor authentication enabled successfully'
+            })
+
+        elif action == 'disable':
+            # Require password or MFA code to disable
+            password = data.get('password')
+            mfa_code = data.get('code')
+
+            # Verify either password or MFA code
+            verified = False
+
+            if password and user.get('provider') == 'email':
+                verified = verify_password(password, user.get('password_hash', ''))
+            elif mfa_code and user.get('mfa_enabled'):
+                totp = pyotp.TOTP(user.get('mfa_secret', ''))
+                verified = totp.verify(mfa_code, valid_window=1)
+
+            if not verified:
+                return jsonify({
+                    'success': False,
+                    'error': 'Verification failed'
+                }), 401
+
+            # Disable MFA
+            user_id = session['user_id']
+            if USE_FIRESTORE:
+                firestore_update_user(user_id, {
+                    'mfa_enabled': False,
+                    'mfa_secret': None
+                })
+            else:
+                auth_storage['users'][user_id]['mfa_enabled'] = False
+                auth_storage['users'][user_id]['mfa_secret'] = None
+                save_auth_storage()
+
+            # Clear MFA trusted flag
+            session.pop('mfa_trusted', None)
+
+            return jsonify({
+                'success': True,
+                'message': 'Two-factor authentication disabled'
+            })
+
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid action'
+            }), 400
+
+    except Exception as e:
+        logger.error(f"Error toggling MFA: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to update MFA settings'
+        }), 500
+
+@app.route('/api/user/export-data', methods=['POST'])
+@require_auth
+@limiter.limit("3 per hour")
+def export_user_data():
+    """Export all user data as JSON"""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        user_id = session['user_id']
+
+        # Gather all user data
+        export_data = {
+            'profile': {
+                'email': user['email'],
+                'name': user['name'],
+                'provider': user.get('provider'),
+                'account_type': user.get('account_type'),
+                'created_at': user.get('created_at'),
+                'last_login': user.get('last_login')
+            },
+            'estates': [],
+            'inventory': [],
+            'documents': []
+        }
+
+        # Get user's estates
+        if USE_FIRESTORE:
+            estates = storage_service.get_user_estates(user_id)
+            export_data['estates'] = estates
+
+            # Get inventory and documents for each estate
+            for estate in estates:
+                estate_id = estate.get('id')
+                inventory = storage_service.get_inventory(estate_id)
+                documents = storage_service.get_documents(estate_id)
+                export_data['inventory'].extend(inventory)
+                export_data['documents'].extend(documents)
+        else:
+            # Fallback to JSON storage
+            export_data['inventory'] = [
+                item for item in inventory_storage.values()
+                if item.get('user_id') == user_id
+            ]
+
+        # Create JSON file
+        json_data = json.dumps(export_data, indent=2)
+
+        return jsonify({
+            'success': True,
+            'data': json_data,
+            'filename': f'myestateally_data_{user_id}_{datetime.now().strftime("%Y%m%d")}.json'
+        })
+
+    except Exception as e:
+        logger.error(f"Error exporting user data: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to export data'
+        }), 500
+
+@app.route('/api/user/account', methods=['DELETE'])
+@require_auth
+@limiter.limit("2 per hour")
+def delete_account():
+    """Permanently delete user account and all associated data"""
+    try:
+        data = request.get_json()
+        user = get_current_user()
+
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        # Require password verification
+        password = data.get('password')
+        mfa_code = data.get('mfa_code')
+        confirmation = data.get('confirmation', '')
+
+        # Verify password (or MFA for OAuth users)
+        verified = False
+        if user.get('provider') == 'email':
+            if not password:
+                return jsonify({
+                    'success': False,
+                    'error': 'Password required'
+                }), 400
+            verified = verify_password(password, user.get('password_hash', ''))
+        else:
+            # OAuth users can delete with just confirmation
+            verified = True
+
+        if not verified:
+            return jsonify({
+                'success': False,
+                'error': 'Password incorrect'
+            }), 401
+
+        # Require confirmation text
+        if confirmation.upper() != 'DELETE MY ACCOUNT':
+            return jsonify({
+                'success': False,
+                'error': 'Please type "DELETE MY ACCOUNT" to confirm'
+            }), 400
+
+        # Verify MFA if enabled
+        if user.get('mfa_enabled') and mfa_code:
+            import pyotp
+            totp = pyotp.TOTP(user.get('mfa_secret', ''))
+            if not totp.verify(mfa_code, valid_window=1):
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid MFA code'
+                }), 401
+
+        user_id = session['user_id']
+
+        # Delete all user data
+        if USE_FIRESTORE:
+            # Delete user estates and all associated data
+            estates = storage_service.get_user_estates(user_id)
+            for estate in estates:
+                estate_id = estate.get('id')
+                # Delete inventory
+                storage_service.delete_collection(f'estates/{estate_id}/inventory')
+                # Delete documents
+                storage_service.delete_collection(f'estates/{estate_id}/documents')
+                # Delete estate
+                storage_service.delete_document('estates', estate_id)
+
+            # Delete user document
+            storage_service.delete_document('users', user_id)
+        else:
+            # Delete from JSON storage
+            if user_id in auth_storage['users']:
+                del auth_storage['users'][user_id]
+                save_auth_storage()
+
+            # Delete inventory items
+            inventory_to_delete = [
+                item_id for item_id, item in inventory_storage.items()
+                if item.get('user_id') == user_id
+            ]
+            for item_id in inventory_to_delete:
+                del inventory_storage[item_id]
+            save_storage('inventory.json', inventory_storage)
+
+        # Clear session
+        session.clear()
+
+        return jsonify({
+            'success': True,
+            'message': 'Account deleted successfully'
+        })
+
+    except Exception as e:
+        logger.error(f"Error deleting account: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to delete account'
         }), 500
 
 # ===== EMAIL NOTIFICATION SYSTEM =====
@@ -3561,6 +4288,8 @@ def send_email_notification(notification_type, recipient_email, template_data):
         return False
 
 @app.route('/api/notifications/send-invitation', methods=['POST'])
+@require_auth
+@limiter.limit("5 per hour")
 def send_invitation_email():
     """Send family invitation email"""
     try:
@@ -3642,20 +4371,27 @@ def create_estate():
         
         user_id = user.get('id') or session.get('user_id')
         estate_id = str(uuid.uuid4())
-        
-        # Create estate
-        estate_storage['estates'][estate_id] = {
+
+        # Create estate data
+        estate_data = {
+            'id': estate_id,
             'name': estate_name,
             'owner_id': user_id,
             'created_at': datetime.now().isoformat(),
             'members': {}
         }
-        
+
+        # Save to Firestore
+        storage_service.add_document('estates', estate_id, estate_data)
+
+        # Also save to in-memory storage for compatibility
+        estate_storage['estates'][estate_id] = estate_data.copy()
+
         # Add to user's estate list
         if user_id not in estate_storage['user_estates']:
             estate_storage['user_estates'][user_id] = []
         estate_storage['user_estates'][user_id].append(estate_id)
-        
+
         save_estate_storage()
 
         # Set as current estate (use both for compatibility)
@@ -3781,6 +4517,7 @@ def switch_estate():
 
 @app.route('/api/estates/<estate_id>/invite', methods=['POST'])
 @require_auth
+@limiter.limit("10 per hour")
 def invite_to_estate(estate_id):
     """Invite a user to an estate"""
     try:
@@ -4286,6 +5023,7 @@ def generate_assignment_report(estate_id: str):
 # ===== PDF REPORT ENDPOINTS =====
 
 @app.route('/api/reports/estate-valuation', methods=['GET'])
+@require_auth
 def generate_estate_report():
     """Generate and download estate valuation report"""
     try:
@@ -4872,6 +5610,7 @@ def unclaim_item(item_id):
 
 @app.route('/api/ai/value-item', methods=['POST'])
 @require_auth
+@limiter.limit("30 per hour")
 def ai_value_item():
     """Use AI to estimate item value from photo and description"""
     try:
@@ -5030,6 +5769,7 @@ Respond with JSON:
 
 @app.route('/api/ai/search', methods=['POST'])
 @require_auth
+@limiter.limit("30 per hour")
 def ai_natural_language_search():
     """Natural language search for inventory items"""
     try:
@@ -5161,7 +5901,8 @@ def estate_timeline():
         }
 
         timeline.append(new_task)
-        save_family_storage()
+        # Save changes to Firestore
+        firestore_update_family_data(estate_id, {'estate_timeline': timeline})
 
         return jsonify({
             'success': True,
@@ -5205,7 +5946,8 @@ def update_timeline_task(task_id):
                 'status': data.get('status', timeline[task_index]['status']),
                 'updated_at': datetime.now().isoformat()
             })
-            save_family_storage()
+            # Save changes to Firestore
+            firestore_update_family_data(estate_id, {'estate_timeline': timeline})
 
             return jsonify({
                 'success': True,
@@ -5214,7 +5956,8 @@ def update_timeline_task(task_id):
             })
         else:
             deleted_task = timeline.pop(task_index)
-            save_family_storage()
+            # Save changes to Firestore
+            firestore_update_family_data(estate_id, {'estate_timeline': timeline})
             return jsonify({
                 'success': True,
                 'message': 'Task deleted',
@@ -5445,6 +6188,7 @@ def get_inventory_statistics(user_id):
 # ===== SEARCH & FILTERING ENDPOINTS =====
 
 @app.route('/api/inventory/search', methods=['POST'])
+@require_auth
 def search_inventory():
     """Advanced inventory search and filtering"""
     try:
@@ -5484,6 +6228,7 @@ def search_inventory():
         }), 500
 
 @app.route('/api/inventory/statistics', methods=['GET'])
+@require_auth
 def inventory_statistics():
     """Get inventory statistics for filtering UI"""
     try:
@@ -5503,6 +6248,7 @@ def inventory_statistics():
         }), 500
 
 @app.route('/api/inventory/categories', methods=['GET'])
+@require_auth
 def get_categories():
     """Get all available categories"""
     try:
@@ -5535,6 +6281,7 @@ def get_categories():
         }), 500
 
 @app.route('/api/inventory/rooms', methods=['GET'])
+@require_auth
 def get_rooms():
     """Get all available rooms"""
     try:
@@ -5567,6 +6314,7 @@ def get_rooms():
         }), 500
 
 @app.route('/api/inventory/quick-filters', methods=['GET'])
+@require_auth
 def get_quick_filters():
     """Get predefined quick filter options"""
     try:
@@ -6160,16 +6908,17 @@ def send_conflict_resolution_email(email, member_code, item_name, recipient, met
 def not_found(error):
     return jsonify({'success': False, 'error': 'Not found'}), 404
 
-# Note: OAuth is configured at the top of this file (lines 87-107)
+# Note: OAuth is configured at the top of this file (lines 125-149)
 # Check if OAuth is properly configured
 _oauth_ready = False
 try:
-    google_client_id = os.environ.get('GOOGLE_CLIENT_ID', '')
-    google_client_secret = os.environ.get('GOOGLE_CLIENT_SECRET', '')
+    # Use same method as OAuth initialization: try env var first, then Secret Manager
+    google_client_id = os.environ.get('GOOGLE_CLIENT_ID') or get_secret('GOOGLE_CLIENT_ID') or ''
+    google_client_secret = os.environ.get('GOOGLE_CLIENT_SECRET') or get_secret('GOOGLE_CLIENT_SECRET') or ''
 
     if google_client_id and google_client_secret and google_client_id != 'your-google-client-id':
         _oauth_ready = True
-        logger.info("Google OAuth configured successfully")
+        logger.info(f"OAuth ready check passed - client_id present: {bool(google_client_id)}, secret present: {bool(google_client_secret)}")
     else:
         logger.warning("Google OAuth credentials not properly configured")
 except Exception as e:
@@ -6290,7 +7039,11 @@ def auth_google_callback():
         if existing_user:
             user_data.update(existing_user)
             user_data['last_login'] = datetime.now().isoformat()
-        
+
+        # Save to Firestore
+        storage_service.add_document('users', user_id, user_data)
+
+        # Also save to in-memory storage for compatibility
         auth_storage['users'][user_id] = user_data
         save_auth_storage()
         
@@ -6307,7 +7060,9 @@ def auth_google_callback():
 
         # Auto-select user's first estate or last used estate
         try:
+            logger.info(f"Attempting to get estates for user {user_id}")
             user_estates = get_user_estates(user_id)
+            logger.info(f"Found {len(user_estates)} estates for user {user_id}")
             if user_estates:
                 # Check if user has a last_used_estate preference
                 last_estate_id = user_data.get('last_used_estate')
@@ -6472,7 +7227,8 @@ def assign_item(share_id):
                 'assigned_at': datetime.now().isoformat(),
                 'share_id': share_id
             })
-            save_family_storage()
+            # Save changes to Firestore
+            firestore_update_family_data(estate_id, {'assignment_decisions': estate_data['assignment_decisions']})
             
             return jsonify({
                 'success': True,
