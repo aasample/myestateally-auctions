@@ -113,12 +113,14 @@ def get_secret(secret_name):
 is_production_env = os.environ.get('GAE_ENV') is not None
 app.config['SESSION_COOKIE_SECURE'] = is_production_env  # Dynamic: True in production (HTTPS), False in dev (HTTP)
 app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent JavaScript access
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
+# For OAuth to work, we need SameSite=None in production (allows cross-site with Google)
+# In dev (HTTP), browsers reject SameSite=None without Secure, so use Lax
+app.config['SESSION_COOKIE_SAMESITE'] = 'None' if is_production_env else 'Lax'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)  # Session lasts 30 days
 
 # Note: We're NOT using Flask-Session extension, just Flask's built-in session
 # This avoids the secret key configuration issues we were having
-logger.info(f"Using Flask's built-in session management (cookie-based), secure={is_production_env}, GAE_ENV={os.environ.get('GAE_ENV')}")
+logger.info(f"Session: secure={is_production_env}, samesite={'None' if is_production_env else 'Lax'}, GAE_ENV={os.environ.get('GAE_ENV')}")
 
 # OAuth Configuration
 oauth = OAuth(app)
