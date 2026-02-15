@@ -116,7 +116,7 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent JavaScript access
 # For OAuth to work, we need SameSite=None in production (allows cross-site with Google)
 # In dev (HTTP), browsers reject SameSite=None without Secure, so use Lax
 app.config['SESSION_COOKIE_SAMESITE'] = 'None' if is_production_env else 'Lax'
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)  # Session lasts 30 days
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=14)  # Reduced from 30 to 14 days for security
 
 # Note: We're NOT using Flask-Session extension, just Flask's built-in session
 # This avoids the secret key configuration issues we were having
@@ -605,6 +605,25 @@ def sanitize_string(value, max_length=500):
     sanitized = value.strip()[:max_length]
     return sanitized
 
+# Allowed file extensions for uploads (security: whitelist approach)
+ALLOWED_UPLOAD_EXTENSIONS = {
+    # Images
+    'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg',
+    # Documents
+    'pdf', 'doc', 'docx', 'txt', 'rtf', 'odt',
+    # Spreadsheets
+    'xls', 'xlsx', 'csv', 'ods',
+    # Other
+    'zip'
+}
+
+def allowed_file(filename):
+    """Check if file extension is allowed (security validation)"""
+    if not filename or '.' not in filename:
+        return False
+    extension = filename.rsplit('.', 1)[1].lower()
+    return extension in ALLOWED_UPLOAD_EXTENSIONS
+
 def save_auth_storage():
     """Save authentication data to file or Firestore"""
     try:
@@ -866,6 +885,19 @@ def set_security_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'SAMEORIGIN'
     response.headers['X-XSS-Protection'] = '1; mode=block'
+
+    # Content-Security-Policy to prevent XSS attacks
+    # Note: unsafe-inline and unsafe-eval needed for current app functionality
+    # TODO: Remove unsafe-inline/unsafe-eval and use nonces/hashes for better security
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; "
+        "font-src 'self' data:; "
+        "connect-src 'self';"
+    )
+
     # Only add HSTS in production (when using HTTPS)
     if request.is_secure:
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
@@ -2309,7 +2341,14 @@ def hero_upload():
                 'success': False,
                 'error': 'No file selected'
             }), 400
-        
+
+        # Security: Validate file type
+        if not allowed_file(file.filename):
+            return jsonify({
+                'success': False,
+                'error': 'Invalid file type. Allowed types: images (PNG, JPG, GIF, WebP, SVG) and documents (PDF)'
+            }), 400
+
         # Save uploaded file (in production, use cloud storage)
         filename = secure_filename(file.filename)
         upload_dir = os.path.join(tempfile.gettempdir(), 'uploads')
@@ -2478,7 +2517,15 @@ def mobile_upload_api():
                 'success': False,
                 'error': 'No file selected'
             }), 400
-        
+
+        # Security: Validate file type
+        if not allowed_file(file.filename):
+            logger.error(f"Invalid file type: {file.filename}")
+            return jsonify({
+                'success': False,
+                'error': 'Invalid file type. Allowed types: images (PNG, JPG, GIF, WebP, SVG) and documents (PDF)'
+            }), 400
+
         session_id = request.form.get('session_id')
         if not session_id:
             logger.error("No session ID provided")
@@ -2684,14 +2731,19 @@ def mobile_upload_api():
 def uploaded_file(filename):
     """Serve uploaded files"""
     try:
+        # Security: Prevent path traversal attacks
+        if '..' in filename or filename.startswith('/') or filename.startswith('\\'):
+            logger.warning(f"Path traversal attempt blocked: {filename}")
+            abort(404)
+
         # For Google App Engine, use /tmp/uploads
         if os.environ.get('GAE_ENV'):
             upload_dir = '/tmp/uploads'
         else:
             upload_dir = os.path.join(tempfile.gettempdir(), 'uploads')
-        
+
         logger.info(f"Serving uploaded file: {filename} from {upload_dir}")
-        
+
         if os.path.exists(os.path.join(upload_dir, filename)):
             return send_from_directory(upload_dir, filename)
         else:
@@ -3460,17 +3512,12 @@ def signup():
                 'error': 'Invalid email format'
             }), 400
 
-        # Validate password length
-        if len(password) < 6:
+        # Validate password strength (OWASP recommendations)
+        password_valid, password_error = validate_password_strength(password)
+        if not password_valid:
             return jsonify({
                 'success': False,
-                'error': 'Password must be at least 6 characters long'
-            }), 400
-
-        if len(password) > 128:
-            return jsonify({
-                'success': False,
-                'error': 'Password too long'
+                'error': password_error
             }), 400
 
         # Check if user already exists (Firestore or JSON)
@@ -5131,6 +5178,11 @@ def generate_family_report():
 def download_report(filename):
     """Download generated PDF report"""
     try:
+        # Security: Prevent path traversal attacks
+        if '..' in filename or filename.startswith('/') or filename.startswith('\\'):
+            logger.warning(f"Path traversal attempt blocked in report download: {filename}")
+            abort(404)
+
         return send_from_directory('/tmp', filename, as_attachment=True)
     except Exception as e:
         logger.error(f"Error downloading report: {str(e)}")
@@ -7297,7 +7349,8 @@ if __name__ == '__main__':
     import tempfile
     upload_dir = os.path.join(tempfile.gettempdir(), 'uploads')
     os.makedirs(upload_dir, exist_ok=True)
-    
-    # Run the app
-    app.run(host='0.0.0.0', port=8080, debug=True)
+
+    # Run the app - NEVER enable debug mode in production (security risk)
+    is_production = os.environ.get('GAE_ENV') is not None
+    app.run(host='0.0.0.0', port=8080, debug=not is_production)
 

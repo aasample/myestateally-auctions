@@ -41,14 +41,27 @@ def sanitize_string(value, max_length=500):
 
 def validate_password_strength(password):
     """
-    Validate password meets minimum requirements
+    Validate password meets security requirements (OWASP recommendations)
     Returns: (is_valid, error_message)
     """
-    if len(password) < 6:
-        return False, "Password must be at least 6 characters long"
+    # Minimum length increased from 6 to 12 for better security
+    if len(password) < 12:
+        return False, "Password must be at least 12 characters long"
 
     if len(password) > 128:
-        return False, "Password too long"
+        return False, "Password too long (max 128 characters)"
+
+    # Require at least one uppercase letter
+    if not any(c.isupper() for c in password):
+        return False, "Password must contain at least one uppercase letter"
+
+    # Require at least one lowercase letter
+    if not any(c.islower() for c in password):
+        return False, "Password must contain at least one lowercase letter"
+
+    # Require at least one digit
+    if not any(c.isdigit() for c in password):
+        return False, "Password must contain at least one number"
 
     return True, None
 
