@@ -6008,8 +6008,10 @@ def get_disposal_summary():
         if not estate_id:
             return jsonify({'success': False, 'error': 'No estate selected'}), 400
 
+        # Get all inventory items from Firestore
+        all_items = firestore_list_inventory_items()
         disposed_items = [
-            item for item in inventory_storage.values()
+            item for item in all_items
             if item.get('status') == 'disposed' and item.get('estate_id') == estate_id
         ]
 
@@ -6967,6 +6969,11 @@ def auth_google_login():
         return jsonify({'success': False, 'error': 'Google OAuth client not registered'}), 400
 
     try:
+        # Clean up any old OAuth state tokens from previous failed attempts
+        session_keys_to_remove = [key for key in session.keys() if key.startswith('_state_google_')]
+        for key in session_keys_to_remove:
+            session.pop(key, None)
+
         redirect_uri = OAUTH_CONFIG['google']['redirect_uri'] or url_for('auth_google_callback', _external=True)
         logger.info(f"Redirecting to Google OAuth with redirect_uri: {redirect_uri}")
         return oauth.google.authorize_redirect(redirect_uri)
@@ -7105,6 +7112,11 @@ def auth_google_callback():
             # Don't fail login if estate selection fails
 
         logger.info(f"Google login successful for user: {user_data['email']}")
+
+        # Clean up OAuth state tokens after successful login
+        session_keys_to_remove = [key for key in list(session.keys()) if key.startswith('_state_google_')]
+        for key in session_keys_to_remove:
+            session.pop(key, None)
 
         # Return redirect directly - Flask will automatically add session cookie
         # with the correct SameSite/Secure flags from app.config
