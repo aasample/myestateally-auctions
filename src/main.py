@@ -7074,12 +7074,8 @@ def auth_google_callback():
         # Also save to in-memory storage for compatibility
         auth_storage['users'][user_id] = user_data
         save_auth_storage()
-        
-        # Create session
-        session_id = create_user_session(user_id)
-        save_auth_storage()  # Save again after creating session
-        
-        # Also set Flask session
+
+        # Set Flask session (is_authenticated() relies on this, not custom session_id)
         session.permanent = True  # Make session persistent
         session['user_id'] = user_id
         session['user_email'] = user_data['email']
@@ -7110,11 +7106,9 @@ def auth_google_callback():
 
         logger.info(f"Google login successful for user: {user_data['email']}")
 
-        resp = make_response(redirect(url_for('index')))
-        # Only use secure cookies in production (HTTPS)
-        is_production = os.environ.get('GAE_ENV') or request.is_secure or 'https' in request.url_root.lower()
-        resp.set_cookie('session_id', session_id, httponly=True, samesite='Lax', max_age=60*60*24*30, secure=is_production)
-        return resp
+        # Return redirect directly - Flask will automatically add session cookie
+        # with the correct SameSite/Secure flags from app.config
+        return redirect(url_for('index'))
     except Exception as e:
         logger.error(f"Google OAuth callback error: {e}", exc_info=True)
         # Redirect to login page with error message instead of returning JSON
