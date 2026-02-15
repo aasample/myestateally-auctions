@@ -4630,10 +4630,11 @@ def auth_status():
             estates = get_user_estates(user_id)
             current_estate_id = get_current_estate_id()
             current_estate = None
-            
-            if current_estate_id and current_estate_id in estate_storage['estates']:
-                current_estate = estate_storage['estates'][current_estate_id].copy()
-                current_estate['id'] = current_estate_id
+
+            if current_estate_id:
+                current_estate = firestore_get_estate(current_estate_id)
+                if current_estate:
+                    current_estate['id'] = current_estate_id
             
             return jsonify({
                 'success': True,
