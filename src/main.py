@@ -2100,6 +2100,73 @@ def download_document(doc_id):
             'error': 'Failed to download document'
         }), 500
 
+@app.route('/api/documents/<doc_id>/preview', methods=['GET'])
+@require_auth
+@limiter.limit("100 per hour")
+def preview_document(doc_id):
+    """Preview a document in-browser (PDF or image)"""
+    try:
+        user_id = session.get('user_id')
+        estate_id = session.get('current_estate_id')
+
+        if not estate_id:
+            return jsonify({
+                'success': False,
+                'error': 'No estate selected'
+            }), 400
+
+        # Get document metadata from Firestore
+        doc_data = storage_service.get_document('documents', doc_id)
+
+        if not doc_data:
+            return jsonify({
+                'success': False,
+                'error': 'Document not found'
+            }), 404
+
+        # Verify document belongs to user's estate
+        if doc_data.get('estate_id') != estate_id:
+            return jsonify({
+                'success': False,
+                'error': 'Access denied'
+            }), 403
+
+        # Get file from Cloud Storage
+        bucket = get_storage_bucket()
+        if not bucket:
+            return jsonify({
+                'success': False,
+                'error': 'Storage service unavailable'
+            }), 503
+
+        blob = bucket.blob(doc_data['storage_path'])
+
+        if not blob.exists():
+            return jsonify({
+                'success': False,
+                'error': 'Document file not found in storage'
+            }), 404
+
+        # Download to bytes
+        file_data = blob.download_as_bytes()
+
+        # Create response with file for in-browser preview
+        response = make_response(file_data)
+        response.headers['Content-Type'] = doc_data.get('content_type', 'application/octet-stream')
+        # Use 'inline' instead of 'attachment' to enable browser preview
+        response.headers['Content-Disposition'] = f'inline; filename="{doc_data["filename"]}"'
+        # Prevent caching of sensitive documents
+        response.headers['Cache-Control'] = 'no-store, private'
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Error previewing document: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to preview document'
+        }), 500
+
 @app.route('/api/documents/<doc_id>', methods=['DELETE'])
 @require_auth
 def delete_document(doc_id):

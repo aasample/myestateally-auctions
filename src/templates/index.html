@@ -37,6 +37,13 @@
                     <span>MyEstateAlly</span>
                     <span class="ai-badge">AI-Powered</span>
                 </div>
+
+                <!-- Mobile Estate Indicator (shown only on mobile) -->
+                <div class="mobile-estate-indicator" id="mobile-estate-indicator" onclick="app.openMobileMoreMenu()" style="display: none;">
+                    <span class="estate-name-mobile" id="estate-name-mobile">Loading...</span>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+
                 <div class="header-actions">
                     <!-- Estate Selector (when authenticated) -->
                     <div id="estate-selector" class="estate-selector" style="display: none;">
@@ -60,6 +67,9 @@
                             </a>
                             <a href="#" onclick="showAccountSettings()">
                                 <i class="fas fa-cog"></i> Settings
+                            </a>
+                            <a href="#" id="install-menu-btn" onclick="triggerPWAInstall()" style="display: none;">
+                                <i class="fas fa-download"></i> Install App
                             </a>
                             <hr>
                             <a href="#" onclick="logout()">
@@ -87,10 +97,38 @@
         </div>
     </header>
 
+    <!-- PWA Install Banner (shown when installable) -->
+    <div id="pwa-install-banner" class="pwa-install-banner" style="display: none;">
+        <div class="container">
+            <div class="banner-content">
+                <div class="banner-icon">
+                    <i class="fas fa-mobile-alt"></i>
+                </div>
+                <div class="banner-text">
+                    <strong>Install MyEstateAlly</strong>
+                    <p>Get quick access from your home screen</p>
+                </div>
+                <div class="banner-actions">
+                    <button id="install-banner-btn" class="btn primary btn-small">
+                        <i class="fas fa-download"></i> Install
+                    </button>
+                    <button id="dismiss-banner-btn" class="btn secondary btn-small">
+                        Dismiss
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Navigation -->
     <nav class="nav">
         <div class="container">
-            <div class="nav-content">
+            <!-- Mobile Menu Button -->
+            <button class="mobile-menu-btn" id="mobile-menu-btn" onclick="app.toggleMobileMenu()" aria-label="Toggle mobile menu">
+                <i class="fas fa-bars"></i>
+            </button>
+
+            <div class="nav-content" id="nav-content">
                 <button class="nav-btn active" data-section="dashboard">
                     <i class="fas fa-tachometer-alt"></i>
                     <span>Dashboard</span>
@@ -804,19 +842,94 @@
             <!-- Legacy Section -->
             <section id="legacy" class="section">
                 <div class="section-header">
-                    <h2><i class="fas fa-heart"></i> Legacy Planning</h2>
+                    <h2><i class="fas fa-heart"></i> Legacy & Estate Plan</h2>
+                    <p class="section-description">Manage item assignments and document your estate distribution plan</p>
+                    <div class="section-actions">
+                        <button class="btn secondary" onclick="app.generateAssignmentReport()">
+                            <i class="fas fa-file-pdf"></i> Generate Report
+                        </button>
+                        <button class="btn secondary" onclick="app.showDesireAnalysis()">
+                            <i class="fas fa-chart-bar"></i> Family Desires
+                        </button>
+                        <button class="btn primary" onclick="app.showBulkAssignmentModal()">
+                            <i class="fas fa-users"></i> Bulk Assign
+                        </button>
+                    </div>
                 </div>
-                
-                <div class="legacy-info">
-                    <div class="info-card">
-                        <h3><i class="fas fa-gift"></i> Estate Assignment</h3>
-                        <p>Plan the future of your belongings:</p>
-                        <ul>
-                            <li>Assign items to specific family members</li>
-                            <li>Set inheritance preferences</li>
-                            <li>Document sentimental value and stories</li>
-                            <li>Create a comprehensive estate plan</li>
-                        </ul>
+
+                <!-- Assignment Statistics -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <i class="fas fa-box-open stat-icon"></i>
+                        <div class="stat-content">
+                            <div class="stat-value" id="legacy-total-items">0</div>
+                            <div class="stat-label">Total Items</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <i class="fas fa-check-circle stat-icon success"></i>
+                        <div class="stat-content">
+                            <div class="stat-value" id="legacy-assigned-items">0</div>
+                            <div class="stat-label">Assigned</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <i class="fas fa-clock stat-icon warning"></i>
+                        <div class="stat-content">
+                            <div class="stat-value" id="legacy-unassigned-items">0</div>
+                            <div class="stat-label">Unassigned</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <i class="fas fa-users stat-icon"></i>
+                        <div class="stat-content">
+                            <div class="stat-value" id="legacy-family-members">0</div>
+                            <div class="stat-label">Family Members</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filters and Search -->
+                <div class="filters-bar">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="legacy-search" placeholder="Search items..." onkeyup="app.filterLegacyItems()">
+                    </div>
+                    <div class="filter-group">
+                        <label for="legacy-filter-status">Status:</label>
+                        <select id="legacy-filter-status" onchange="app.filterLegacyItems()">
+                            <option value="all">All Items</option>
+                            <option value="assigned">Assigned</option>
+                            <option value="unassigned">Unassigned</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="legacy-filter-assignee">Assignee:</label>
+                        <select id="legacy-filter-assignee" onchange="app.filterLegacyItems()">
+                            <option value="all">All Family Members</option>
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="legacy-sort">Sort:</label>
+                        <select id="legacy-sort" onchange="app.sortLegacyItems()">
+                            <option value="name">Name</option>
+                            <option value="value">Value</option>
+                            <option value="assignee">Assignee</option>
+                            <option value="date">Date Added</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Assignment Grid -->
+                <div id="legacy-items-grid" class="assignment-grid">
+                    <!-- Items will be populated here -->
+                    <div class="empty-state">
+                        <i class="fas fa-box-open fa-3x"></i>
+                        <p>No items in inventory yet</p>
+                        <button class="btn primary" onclick="app.switchTab('inventory')">
+                            <i class="fas fa-plus"></i> Add Items to Inventory
+                        </button>
                     </div>
                 </div>
             </section>
@@ -875,6 +988,44 @@
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Document Preview Modal -->
+    <div id="preview-document-modal" class="modal">
+        <div class="modal-content preview-modal-content">
+            <div class="modal-header">
+                <h3 id="preview-document-title"><i class="fas fa-eye"></i> Document Preview</h3>
+                <button class="modal-close" onclick="app.closePreviewModal()">&times;</button>
+            </div>
+            <div class="modal-body preview-modal-body">
+                <!-- Loading spinner -->
+                <div id="preview-loading" class="preview-loading">
+                    <div class="spinner"></div>
+                    <p>Loading document...</p>
+                </div>
+
+                <!-- Error message -->
+                <div id="preview-error" class="preview-error" style="display: none;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p id="preview-error-message">Failed to load preview</p>
+                    <button class="btn primary" id="preview-download-fallback" style="margin-top: 15px;">
+                        <i class="fas fa-download"></i> Download Instead
+                    </button>
+                </div>
+
+                <!-- Preview iframe for PDFs -->
+                <iframe id="preview-iframe" style="display: none;"></iframe>
+
+                <!-- Preview image for JPG/PNG -->
+                <img id="preview-image" style="display: none;" alt="Document preview">
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn secondary" onclick="app.closePreviewModal()">Close</button>
+                <button type="button" class="btn primary" id="preview-download-btn">
+                    <i class="fas fa-download"></i> Download
+                </button>
             </div>
         </div>
     </div>
@@ -1535,24 +1686,417 @@
         // PWA Install Prompt
         let deferredPrompt;
         const installBtn = document.getElementById('install-btn');
+        const installBanner = document.getElementById('pwa-install-banner');
+        const installBannerBtn = document.getElementById('install-banner-btn');
+        const dismissBannerBtn = document.getElementById('dismiss-banner-btn');
+        const installMenuBtn = document.getElementById('install-menu-btn');
 
+        // Show install prompt when available
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             deferredPrompt = e;
+
+            // Check if user previously dismissed the banner
+            const bannerDismissed = localStorage.getItem('pwa-banner-dismissed');
+
+            if (!bannerDismissed) {
+                installBanner.style.display = 'block';
+            }
+
+            // Show install options
             installBtn.style.display = 'block';
+            if (installMenuBtn) installMenuBtn.style.display = 'block';
+
             console.log('MyEstateAlly PWA: Install prompt available');
         });
 
-        installBtn.addEventListener('click', async () => {
+        // Function to trigger PWA install
+        window.triggerPWAInstall = async () => {
             if (deferredPrompt) {
                 deferredPrompt.prompt();
                 const { outcome } = await deferredPrompt.userChoice;
                 console.log(`MyEstateAlly PWA: User ${outcome} the install prompt`);
+
+                if (outcome === 'accepted') {
+                    // Hide all install prompts
+                    installBanner.style.display = 'none';
+                    installBtn.style.display = 'none';
+                    if (installMenuBtn) installMenuBtn.style.display = 'none';
+                }
+
                 deferredPrompt = null;
-                installBtn.style.display = 'none';
             }
+        };
+
+        // Header install button
+        installBtn.addEventListener('click', triggerPWAInstall);
+
+        // Banner install button
+        if (installBannerBtn) {
+            installBannerBtn.addEventListener('click', triggerPWAInstall);
+        }
+
+        // Dismiss banner
+        if (dismissBannerBtn) {
+            dismissBannerBtn.addEventListener('click', () => {
+                installBanner.style.display = 'none';
+                localStorage.setItem('pwa-banner-dismissed', 'true');
+            });
+        }
+
+        // Hide prompts when app is installed
+        window.addEventListener('appinstalled', () => {
+            console.log('MyEstateAlly PWA: App installed');
+            installBanner.style.display = 'none';
+            installBtn.style.display = 'none';
+            if (installMenuBtn) installMenuBtn.style.display = 'none';
+            localStorage.removeItem('pwa-banner-dismissed');
         });
     </script>
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="bottom-nav" id="bottom-nav">
+        <button class="bottom-nav-btn active" data-section="dashboard" onclick="app.switchTab('dashboard'); app.setActiveBottomNav(this);">
+            <i class="fas fa-tachometer-alt"></i>
+            <span>Dashboard</span>
+        </button>
+        <button class="bottom-nav-btn" data-section="inventory" onclick="app.switchTab('inventory'); app.setActiveBottomNav(this);">
+            <i class="fas fa-boxes"></i>
+            <span>Inventory</span>
+        </button>
+        <button class="bottom-nav-btn" data-section="family" onclick="app.switchTab('family'); app.setActiveBottomNav(this);">
+            <i class="fas fa-users"></i>
+            <span>Family</span>
+        </button>
+        <button class="bottom-nav-btn" data-section="documents" onclick="app.switchTab('documents'); app.setActiveBottomNav(this);">
+            <i class="fas fa-file-alt"></i>
+            <span>Documents</span>
+        </button>
+        <button class="bottom-nav-btn" onclick="app.openMobileMoreMenu();">
+            <i class="fas fa-ellipsis-h"></i>
+            <span>More</span>
+        </button>
+    </nav>
+
+    <!-- Bulk Assignment Modal -->
+    <div id="bulk-assignment-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-users"></i> Bulk Assignment</h3>
+                <button class="modal-close" onclick="app.closeModal('bulk-assignment-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Assign To:</label>
+                    <select id="bulk-assignee">
+                        <option value="">Select family member...</option>
+                        <!-- Populated dynamically -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Select Items:</label>
+                    <div id="bulk-items-list" class="checklist">
+                        <!-- Checkboxes for each unassigned item -->
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Reason/Note (Optional):</label>
+                    <textarea id="bulk-assignment-reason" rows="3" placeholder="Why are these items being assigned to this person?"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn secondary" onclick="app.closeModal('bulk-assignment-modal')">Cancel</button>
+                <button class="btn primary" onclick="app.submitBulkAssignment()">
+                    <i class="fas fa-check"></i> Assign Items
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Profile Modal -->
+    <div id="user-profile-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-user"></i> User Profile</h3>
+                <button class="modal-close" onclick="app.closeModal('user-profile-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="profile-form" onsubmit="app.saveUserProfile(event)">
+                    <div class="profile-section">
+                        <div class="form-group">
+                            <label for="profile-name">
+                                <i class="fas fa-signature"></i> Name *
+                            </label>
+                            <input type="text" id="profile-name" name="name" required minlength="2" maxlength="100" placeholder="Your full name">
+                        </div>
+                        <div class="form-group">
+                            <label for="profile-email"><i class="fas fa-envelope"></i> Email Address</label>
+                            <input type="email" id="profile-email" name="email" readonly disabled style="background: #f5f5f5; cursor: not-allowed;">
+                            <small class="form-hint">Email cannot be changed</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="profile-provider"><i class="fas fa-key"></i> Sign-In Method</label>
+                            <input type="text" id="profile-provider" name="provider" readonly disabled style="background: #f5f5f5; cursor: not-allowed;">
+                        </div>
+                        <div class="form-group">
+                            <label for="profile-account-type"><i class="fas fa-crown"></i> Account Type</label>
+                            <input type="text" id="profile-account-type" name="account_type" readonly disabled style="background: #f5f5f5; cursor: not-allowed;">
+                        </div>
+                        <div class="form-group">
+                            <label for="profile-created"><i class="fas fa-calendar-plus"></i> Member Since</label>
+                            <input type="text" id="profile-created" name="created_at" readonly disabled style="background: #f5f5f5; cursor: not-allowed;">
+                        </div>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn secondary" onclick="app.closeModal('user-profile-modal')">Cancel</button>
+                        <button type="submit" class="btn primary"><i class="fas fa-save"></i> Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Account Settings Modal -->
+    <div id="account-settings-modal" class="modal">
+        <div class="modal-content large-modal">
+            <div class="modal-header">
+                <h3><i class="fas fa-cog"></i> Account Settings</h3>
+                <button class="modal-close" onclick="app.closeModal('account-settings-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-sections">
+                    <div class="settings-section">
+                        <h4 class="settings-section-title"><i class="fas fa-shield-alt"></i> Security</h4>
+                        <div id="password-change-container" class="settings-item">
+                            <div class="settings-item-header">
+                                <div>
+                                    <strong>Change Password</strong>
+                                    <p class="settings-item-desc">Update your account password</p>
+                                </div>
+                                <button class="btn secondary" onclick="app.showChangePassword()"><i class="fas fa-key"></i> Change Password</button>
+                            </div>
+                            <div id="password-change-form-container" style="display: none;">
+                                <form id="change-password-form" onsubmit="app.changePassword(event)">
+                                    <div class="form-group">
+                                        <label for="current-password">Current Password *</label>
+                                        <input type="password" id="current-password" name="current_password" required minlength="8">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="new-password">New Password *</label>
+                                        <input type="password" id="new-password" name="new_password" required minlength="8">
+                                        <small>At least 8 characters</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="confirm-new-password">Confirm New Password *</label>
+                                        <input type="password" id="confirm-new-password" name="confirm_password" required minlength="8">
+                                    </div>
+                                    <div class="form-actions">
+                                        <button type="button" class="btn secondary" onclick="app.hideChangePassword()">Cancel</button>
+                                        <button type="submit" class="btn primary"><i class="fas fa-save"></i> Update Password</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="settings-item">
+                            <div class="settings-item-header">
+                                <div>
+                                    <strong>Two-Factor Authentication</strong>
+                                    <p class="settings-item-desc"><span id="mfa-status-text">Not enabled</span></p>
+                                </div>
+                                <button id="mfa-toggle-btn" class="btn secondary" onclick="app.toggleMFA()"><i class="fas fa-mobile-alt"></i> Enable 2FA</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="settings-section">
+                        <h4 class="settings-section-title"><i class="fas fa-info-circle"></i> Account Information</h4>
+                        <div class="settings-item">
+                            <div class="settings-info-grid">
+                                <div class="settings-info-item">
+                                    <label>Account Type</label>
+                                    <span id="settings-account-type">Free</span>
+                                </div>
+                                <div class="settings-info-item">
+                                    <label>Member Since</label>
+                                    <span id="settings-created-date">-</span>
+                                </div>
+                                <div class="settings-info-item">
+                                    <label>User ID</label>
+                                    <span id="settings-user-id" style="font-family: monospace; font-size: 0.9em;">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="settings-section">
+                        <h4 class="settings-section-title"><i class="fas fa-database"></i> Data Management</h4>
+                        <div class="settings-item">
+                            <div class="settings-item-header">
+                                <div>
+                                    <strong>Export Your Data</strong>
+                                    <p class="settings-item-desc">Download all your account data as JSON</p>
+                                </div>
+                                <button class="btn secondary" onclick="app.exportAccountData()"><i class="fas fa-download"></i> Export Data</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="settings-section danger-zone">
+                        <h4 class="settings-section-title"><i class="fas fa-exclamation-triangle"></i> Danger Zone</h4>
+                        <div class="settings-item">
+                            <div class="settings-item-header">
+                                <div>
+                                    <strong>Delete Account</strong>
+                                    <p class="settings-item-desc">Permanently delete your account and all data. This action cannot be undone.</p>
+                                </div>
+                                <button class="btn danger" onclick="app.confirmDeleteAccount()"><i class="fas fa-trash-alt"></i> Delete Account</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MFA Setup Modal -->
+    <div id="mfa-setup-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-mobile-alt"></i> Enable Two-Factor Authentication</h3>
+                <button class="modal-close" onclick="app.closeModal('mfa-setup-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="mfa-setup-container">
+                    <div class="mfa-instructions">
+                        <h4>Setup Instructions:</h4>
+                        <ol>
+                            <li>Install an authenticator app (Google Authenticator, Authy, etc.)</li>
+                            <li>Scan the QR code below with your authenticator app</li>
+                            <li>Enter the 6-digit code from your app to verify</li>
+                        </ol>
+                    </div>
+                    <div class="mfa-qr-container">
+                        <div id="mfa-qr-code" class="qr-code-display">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Loading QR Code...</p>
+                        </div>
+                        <div class="mfa-secret-container">
+                            <label>Manual Entry Key:</label>
+                            <code id="mfa-secret-display">-</code>
+                            <button class="btn-icon" onclick="app.copyMFASecret()" title="Copy secret"><i class="fas fa-copy"></i></button>
+                        </div>
+                    </div>
+                    <form id="mfa-verify-form" onsubmit="app.verifyMFASetup(event)">
+                        <div class="form-group">
+                            <label for="mfa-verification-code">Enter 6-Digit Code *</label>
+                            <input type="text" id="mfa-verification-code" name="code" required maxlength="6" pattern="[0-9]{6}" placeholder="000000" style="text-align: center; font-size: 1.5em; letter-spacing: 0.5em;">
+                        </div>
+                        <div class="modal-actions">
+                            <button type="button" class="btn secondary" onclick="app.cancelMFASetup()">Cancel</button>
+                            <button type="submit" class="btn primary"><i class="fas fa-check"></i> Verify & Enable</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Account Confirmation Modal -->
+    <div id="delete-account-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header danger-header">
+                <h3><i class="fas fa-exclamation-triangle"></i> Delete Account</h3>
+                <button class="modal-close" onclick="app.closeModal('delete-account-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="warning-message">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p><strong>Warning:</strong> This action is permanent and cannot be undone!</p>
+                </div>
+                <div class="delete-consequences">
+                    <p>Deleting your account will:</p>
+                    <ul>
+                        <li>Permanently delete all your estates and inventory items</li>
+                        <li>Remove all uploaded photos and documents</li>
+                        <li>Delete all family sharing data</li>
+                        <li>Remove your account from all shared estates</li>
+                    </ul>
+                </div>
+                <form id="delete-account-form" onsubmit="app.deleteAccount(event)">
+                    <div class="form-group" id="delete-password-group">
+                        <label for="delete-password">Confirm Your Password *</label>
+                        <input type="password" id="delete-password" name="password" required>
+                    </div>
+                    <div class="form-group" id="delete-mfa-group" style="display: none;">
+                        <label for="delete-mfa-code">2FA Code (if enabled)</label>
+                        <input type="text" id="delete-mfa-code" name="mfa_code" maxlength="6" pattern="[0-9]{6}" placeholder="000000">
+                    </div>
+                    <div class="form-group">
+                        <label for="delete-confirmation">Type <strong>DELETE MY ACCOUNT</strong> to confirm *</label>
+                        <input type="text" id="delete-confirmation" name="confirmation" required placeholder="DELETE MY ACCOUNT">
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn secondary" onclick="app.closeModal('delete-account-modal')">Cancel</button>
+                        <button type="submit" class="btn danger"><i class="fas fa-trash-alt"></i> Delete My Account</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile More Menu Modal -->
+    <div id="mobile-more-menu" class="mobile-more-menu" style="display: none;">
+        <div class="more-menu-header">
+            <h3>More Options</h3>
+            <button onclick="app.closeMobileMoreMenu()" class="close-btn">&times;</button>
+        </div>
+        <div class="more-menu-content">
+            <!-- Estate Selector for Mobile -->
+            <div class="mobile-estate-section">
+                <h4>Current Estate</h4>
+                <div class="mobile-estate-selector" id="mobile-estate-selector">
+                    <select id="mobile-estate-dropdown" onchange="app.switchEstate(this.value); app.closeMobileMoreMenu();">
+                        <option value="">Select Estate...</option>
+                    </select>
+                </div>
+                <button class="btn btn-sm btn-secondary" onclick="app.openNewEstateModal(); app.closeMobileMoreMenu();" style="width: 100%; margin-top: 8px;">
+                    <i class="fas fa-plus"></i> Create New Estate
+                </button>
+            </div>
+            <hr style="margin: 0;">
+
+            <button class="more-menu-item" data-section="ai-pricing" onclick="app.switchTab('ai-pricing'); app.closeMobileMoreMenu(); app.setActiveBottomNav(null);">
+                <i class="fas fa-search-dollar"></i>
+                <span>AI Pricing</span>
+            </button>
+            <button class="more-menu-item" data-section="estate" onclick="app.switchTab('estate'); app.closeMobileMoreMenu(); app.setActiveBottomNav(null);">
+                <i class="fas fa-clipboard-list"></i>
+                <span>Estate Settlement</span>
+            </button>
+            <button class="more-menu-item" data-section="activity-log" onclick="app.switchTab('activity-log'); app.closeMobileMoreMenu(); app.setActiveBottomNav(null);">
+                <i class="fas fa-history"></i>
+                <span>Activity</span>
+            </button>
+            <button class="more-menu-item" data-section="legacy" onclick="app.switchTab('legacy'); app.closeMobileMoreMenu(); app.setActiveBottomNav(null);">
+                <i class="fas fa-heart"></i>
+                <span>Legacy</span>
+            </button>
+            <hr>
+            <button class="more-menu-item" onclick="showUserProfile(); app.closeMobileMoreMenu();">
+                <i class="fas fa-user"></i>
+                <span>Profile</span>
+            </button>
+            <button class="more-menu-item" onclick="showAccountSettings(); app.closeMobileMoreMenu();">
+                <i class="fas fa-cog"></i>
+                <span>Settings</span>
+            </button>
+            <button class="more-menu-item" id="install-more-btn" onclick="triggerPWAInstall(); app.closeMobileMoreMenu();" style="display: none;">
+                <i class="fas fa-download"></i>
+                <span>Install App</span>
+            </button>
+            <button class="more-menu-item" onclick="logout(); app.closeMobileMoreMenu();">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Logout</span>
+            </button>
+        </div>
+    </div>
 </body>
 </html>
 

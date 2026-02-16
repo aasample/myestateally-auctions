@@ -21,6 +21,7 @@ class MyEstateAllyApp {
         this.inventory = [];
         this.documents = [];
         this.familyMembers = [];
+        this.legacyItems = [];
         this.sharingSettings = {
             enabled: true,
             show_for_sale_only: false,
@@ -34,24 +35,34 @@ class MyEstateAllyApp {
     /**
      * Initialize the application
      */
-    init() {
+    async init() {
         console.log('MyEstateAlly app initializing...');
-        
-        // Check for existing session or set up demo user
-        this.checkAuthStatus();
-        
+
+        // Wait for auth check to complete BEFORE loading dashboard data
+        const isAuthenticated = await this.checkAuthStatus();
+
+        // Always set up event listeners
         this.setupEventListeners();
+
+        // Only initialize dashboard if authenticated
+        if (!isAuthenticated) {
+            console.log('User not authenticated, skipping dashboard initialization');
+            return; // Stop here for login page
+        }
+
+        // Dashboard initialization (only for authenticated users)
+        console.log('User authenticated, initializing dashboard...');
         this.setupHeroUpload();
         this.loadInventory();
         this.loadDocuments();
         this.loadFamilyData();
         this.updateStats();
-        
+
         // Load estate settlement data
         this.loadEstateTimeline();
         this.updateDisposalStats();
         this.setupPWA();
-        
+
         // Listen for inventory updates from mobile upload
         window.addEventListener('message', (event) => {
             if (event.data && event.data.type === 'inventory_updated') {
@@ -59,7 +70,7 @@ class MyEstateAllyApp {
                 this.loadInventory();
             }
         });
-        
+
         console.log('MyEstateAlly app initialized successfully');
     }
 
@@ -86,40 +97,71 @@ class MyEstateAllyApp {
         try {
             const response = await fetch('/api/auth/status');
             const data = await response.json();
-            
+
             if (data.success && data.authenticated) {
                 this.currentUser = data.user;
                 console.log('User authenticated:', this.currentUser.name);
                 this.updateAuthUI(true);
-                
+
                 // Load estates and update selector
                 if (data.estates) {
                     this.updateEstateSelector(data.estates, data.current_estate_id);
                 }
-                
+
                 // If no current estate but estates exist, switch to first one
                 if (!data.current_estate_id && data.estates && data.estates.length > 0) {
                     await this.switchEstate(data.estates[0].id);
                 }
-                
-                // If no estates exist, show welcome modal
+
+                // If no estates exist, show welcome modal - MANDATORY for first-time users
                 if (!data.estates || data.estates.length === 0) {
+                    console.warn('User has no estates - showing mandatory welcome modal');
+
                     // Show welcome modal for first-time users
                     setTimeout(() => {
                         this.showWelcomeModal();
+
+                        // Make modal backdrop non-dismissible for users with no estates
+                        const welcomeModal = document.getElementById('welcome-modal');
+                        if (welcomeModal) {
+                            welcomeModal.classList.add('mandatory-modal');
+                            // Prevent backdrop clicks from closing modal
+                            welcomeModal.onclick = (e) => {
+                                if (e.target === welcomeModal) {
+                                    // Show toast instead of closing
+                                    this.showMessage('Please create your first estate to continue', 'warning');
+                                }
+                            };
+                        }
+
+                        // On mobile, also show persistent message
+                        if (window.innerWidth <= 768) {
+                            this.showMessage('Create your first estate to get started', 'info');
+                        }
                     }, 500);
+
+                    // Disable interactions with main UI until estate is created
+                    const mainContent = document.querySelector('.main');
+                    if (mainContent) {
+                        mainContent.style.pointerEvents = 'none';
+                        mainContent.style.opacity = '0.5';
+                    }
                 }
-                
-                return;
+
+                return true; // User is authenticated
             }
-            
+
             // No valid session, show auth modal
             this.updateAuthUI(false);
-            
+            this.openModal('auth-modal');
+            return false; // User is not authenticated
+
         } catch (error) {
             console.error('Auth check failed:', error);
             // Fallback to showing auth UI
             this.updateAuthUI(false);
+            this.openModal('auth-modal');
+            return false; // Auth check failed, treat as not authenticated
         }
     }
 
@@ -175,6 +217,7 @@ class MyEstateAllyApp {
             btn.addEventListener('click', (e) => {
                 const section = e.target.closest('.nav-btn').dataset.section;
                 this.switchTab(section);
+                this.closeMobileMenu(); // Close mobile menu when switching tabs
             });
         });
 
@@ -332,6 +375,8 @@ class MyEstateAllyApp {
             this.loadFamilyData();
         } else if (sectionName === 'inventory') {
             this.loadInventory();
+        } else if (sectionName === 'legacy') {
+            this.loadLegacy();
         }
     }
 
@@ -389,8 +434,18 @@ class MyEstateAllyApp {
             const result = await response.json();
 
             if (result.success) {
-                this.showMessage('Photo analyzed successfully!', 'success');
-                this.displayAIAnalysis(result.analysis);
+                // Item was automatically created
+                if (result.item) {
+                    this.showMessage(`Item "${result.item.name}" added to inventory!`, 'success');
+                    // Reload inventory to show the new item
+                    await this.loadInventory();
+                    // Switch to inventory tab
+                    this.switchTab('inventory');
+                } else {
+                    // Just analysis, no item created
+                    this.showMessage('Photo analyzed successfully!', 'success');
+                    this.displayAIAnalysis(result.analysis);
+                }
             } else {
                 throw new Error(result.error || 'Upload failed');
             }
@@ -534,10 +589,29 @@ class MyEstateAllyApp {
      * Display AI analysis results
      */
     displayAIAnalysis(analysis) {
-        // Create a simple display of the analysis
-        const message = `AI identified: ${analysis.item_name} (${analysis.category})\nEstimated value: $${analysis.estimated_value_min}-$${analysis.estimated_value_max}\nConfidence: ${Math.round(analysis.confidence * 100)}%`;
+        // Pre-fill the add item modal with AI analysis results
+        document.getElementById('item-name').value = analysis.item_name || '';
+        document.getElementById('item-category').value = analysis.category || '';
+        document.getElementById('item-description').value = analysis.description || '';
+
+        // Use average of min/max for estimated value
+        const avgValue = Math.round((analysis.estimated_value_min + analysis.estimated_value_max) / 2);
+        document.getElementById('item-value').value = avgValue || '';
+
+        // Store the photo URL if available
+        if (analysis.photo_url) {
+            this.currentItemPhoto = analysis.photo_url;
+        }
+
+        // Show success message
+        const message = `AI identified: ${analysis.item_name} (${analysis.category})\nEstimated value: $${analysis.estimated_value_min}-$${analysis.estimated_value_max}\nOpening add item form...`;
         this.showMessage(message, 'success');
-        
+
+        // Open the add item modal after a brief delay
+        setTimeout(() => {
+            this.openModal('add-item-modal');
+        }, 1000);
+
         // Add to activity
         this.addActivity(`AI analyzed new item: ${analysis.item_name}`);
     }
@@ -546,6 +620,12 @@ class MyEstateAllyApp {
      * Load inventory data
      */
     async loadInventory() {
+        // Guard: Skip if not authenticated
+        if (!this.currentUser) {
+            console.log('Skipping inventory load - user not authenticated');
+            return;
+        }
+
         try {
             console.log('Loading inventory...');
             const response = await fetch('/api/items');
@@ -1276,6 +1356,12 @@ class MyEstateAllyApp {
      * Update statistics
      */
     updateStats() {
+        // Guard: Skip if not authenticated
+        if (!this.currentUser) {
+            console.log('Skipping stats update - user not authenticated');
+            return;
+        }
+
         const totalItems = this.inventory.length;
         const totalValue = this.inventory.reduce((sum, item) => sum + (item.estimatedValue || 0), 0);
         const forSaleItems = this.inventory.filter(item => item.forSale).length;
@@ -1291,6 +1377,12 @@ class MyEstateAllyApp {
      * Load family data
      */
     async loadFamilyData() {
+        // Guard: Skip if not authenticated
+        if (!this.currentUser) {
+            console.log('Skipping family data load - user not authenticated');
+            return;
+        }
+
         try {
             // Load family members
             const membersResponse = await fetch('/api/family/members');
@@ -1634,6 +1726,326 @@ class MyEstateAllyApp {
     }
 
     /**
+     * Load legacy/assignment data
+     */
+    async loadLegacy() {
+        try {
+            // Fetch inventory items (to show assignments)
+            const inventoryResponse = await fetch('/api/items');
+            const inventoryData = await inventoryResponse.json();
+
+            // Fetch family members (to populate filters)
+            const familyResponse = await fetch('/api/family/members');
+            const familyData = await familyResponse.json();
+
+            if (inventoryData.success && familyData.success) {
+                this.legacyItems = inventoryData.items || [];
+                this.familyMembers = familyData.members || [];
+
+                this.updateLegacyStats();
+                this.populateLegacyFilters();
+                this.displayLegacyItems();
+            }
+        } catch (error) {
+            console.error('Error loading legacy data:', error);
+            this.showMessage('Failed to load legacy data', 'error');
+        }
+    }
+
+    /**
+     * Update legacy statistics
+     */
+    updateLegacyStats() {
+        const totalItems = this.legacyItems.length;
+        const assignedItems = this.legacyItems.filter(item => item.assigned_to).length;
+        const unassignedItems = totalItems - assignedItems;
+        const familyMembers = this.familyMembers.length;
+
+        document.getElementById('legacy-total-items').textContent = totalItems;
+        document.getElementById('legacy-assigned-items').textContent = assignedItems;
+        document.getElementById('legacy-unassigned-items').textContent = unassignedItems;
+        document.getElementById('legacy-family-members').textContent = familyMembers;
+    }
+
+    /**
+     * Populate filter dropdowns
+     */
+    populateLegacyFilters() {
+        const assigneeFilter = document.getElementById('legacy-filter-assignee');
+
+        // Clear existing options (except "All")
+        assigneeFilter.innerHTML = '<option value="all">All Family Members</option>';
+
+        // Add family members
+        this.familyMembers.forEach(member => {
+            const option = document.createElement('option');
+            option.value = member.email;
+            option.textContent = member.name;
+            assigneeFilter.appendChild(option);
+        });
+    }
+
+    /**
+     * Display legacy items in grid
+     */
+    displayLegacyItems() {
+        const grid = document.getElementById('legacy-items-grid');
+        const filteredItems = this.getFilteredLegacyItems();
+
+        if (filteredItems.length === 0) {
+            grid.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-box-open fa-3x"></i>
+                    <p>No items match your filters</p>
+                </div>
+            `;
+            return;
+        }
+
+        grid.innerHTML = filteredItems.map(item => `
+            <div class="assignment-card" data-item-id="${item.id}">
+                <div class="assignment-card-image">
+                    ${item.photo ? `<img src="${item.photo}" alt="${item.name}">` : '<i class="fas fa-box fa-3x"></i>'}
+                </div>
+                <div class="assignment-card-content">
+                    <h4>${item.name}</h4>
+                    <p class="item-category"><i class="fas fa-tag"></i> ${item.category || 'Uncategorized'}</p>
+                    <p class="item-value"><i class="fas fa-dollar-sign"></i> ${item.value ? '$' + item.value.toFixed(2) : 'No value'}</p>
+                    ${item.assigned_to ? `
+                        <div class="assignment-status assigned">
+                            <i class="fas fa-user-check"></i> Assigned to ${this.getFamilyMemberName(item.assigned_to)}
+                        </div>
+                        ${item.assignment_reason ? `<p class="assignment-reason">${item.assignment_reason}</p>` : ''}
+                    ` : `
+                        <div class="assignment-status unassigned">
+                            <i class="fas fa-user-times"></i> Not assigned
+                        </div>
+                    `}
+                </div>
+                <div class="assignment-card-actions">
+                    ${item.assigned_to ? `
+                        <button class="btn btn-sm secondary" onclick="app.reassignItem('${item.id}')">
+                            <i class="fas fa-exchange-alt"></i> Reassign
+                        </button>
+                        <button class="btn btn-sm danger" onclick="app.unassignItem('${item.id}')">
+                            <i class="fas fa-times"></i> Unassign
+                        </button>
+                    ` : `
+                        <button class="btn btn-sm primary" onclick="app.assignItem('${item.id}')">
+                            <i class="fas fa-user-plus"></i> Assign
+                        </button>
+                    `}
+                    <button class="btn btn-sm secondary" onclick="app.addItemStory('${item.id}')">
+                        <i class="fas fa-heart"></i> Add Story
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    /**
+     * Filter legacy items based on search and filters
+     */
+    getFilteredLegacyItems() {
+        let items = [...this.legacyItems];
+
+        // Search filter
+        const searchTerm = document.getElementById('legacy-search').value.toLowerCase();
+        if (searchTerm) {
+            items = items.filter(item =>
+                item.name.toLowerCase().includes(searchTerm) ||
+                (item.description && item.description.toLowerCase().includes(searchTerm))
+            );
+        }
+
+        // Status filter
+        const statusFilter = document.getElementById('legacy-filter-status').value;
+        if (statusFilter === 'assigned') {
+            items = items.filter(item => item.assigned_to);
+        } else if (statusFilter === 'unassigned') {
+            items = items.filter(item => !item.assigned_to);
+        }
+
+        // Assignee filter
+        const assigneeFilter = document.getElementById('legacy-filter-assignee').value;
+        if (assigneeFilter !== 'all') {
+            items = items.filter(item => item.assigned_to === assigneeFilter);
+        }
+
+        return items;
+    }
+
+    /**
+     * Filter and redisplay items
+     */
+    filterLegacyItems() {
+        this.displayLegacyItems();
+    }
+
+    /**
+     * Sort legacy items
+     */
+    sortLegacyItems() {
+        const sortBy = document.getElementById('legacy-sort').value;
+
+        this.legacyItems.sort((a, b) => {
+            switch(sortBy) {
+                case 'name':
+                    return a.name.localeCompare(b.name);
+                case 'value':
+                    return (b.value || 0) - (a.value || 0);
+                case 'assignee':
+                    return (a.assigned_to || 'zzz').localeCompare(b.assigned_to || 'zzz');
+                case 'date':
+                    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+                default:
+                    return 0;
+            }
+        });
+
+        this.displayLegacyItems();
+    }
+
+    /**
+     * Get family member name by email
+     */
+    getFamilyMemberName(email) {
+        const member = this.familyMembers.find(m => m.email === email);
+        return member ? member.name : email;
+    }
+
+    /**
+     * Assign single item
+     */
+    async assignItem(itemId) {
+        const item = this.legacyItems.find(i => i.id === itemId);
+        if (!item) return;
+
+        // Reuse existing showAssignmentModal function
+        this.showAssignmentModal(item);
+    }
+
+    /**
+     * Reassign item
+     */
+    async reassignItem(itemId) {
+        this.assignItem(itemId); // Same as assign, modal will show current assignment
+    }
+
+    /**
+     * Unassign item
+     */
+    async unassignItem(itemId) {
+        if (!confirm('Remove assignment from this item?')) return;
+
+        try {
+            const response = await fetch(`/api/items/${itemId}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    assigned_to: '',
+                    assignment_reason: ''
+                })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                this.showMessage('Assignment removed', 'success');
+                await this.loadLegacy();
+            } else {
+                throw new Error(data.error || 'Failed to unassign item');
+            }
+        } catch (error) {
+            console.error('Error unassigning item:', error);
+            this.showMessage(error.message, 'error');
+        }
+    }
+
+    /**
+     * Show bulk assignment modal
+     */
+    showBulkAssignmentModal() {
+        // Populate family members dropdown
+        const assigneeSelect = document.getElementById('bulk-assignee');
+        assigneeSelect.innerHTML = '<option value="">Select family member...</option>';
+        this.familyMembers.forEach(member => {
+            const option = document.createElement('option');
+            option.value = member.email;
+            option.textContent = member.name;
+            assigneeSelect.appendChild(option);
+        });
+
+        // Populate items checklist (only unassigned items)
+        const itemsList = document.getElementById('bulk-items-list');
+        const unassignedItems = this.legacyItems.filter(item => !item.assigned_to);
+
+        if (unassignedItems.length === 0) {
+            itemsList.innerHTML = '<p>All items are already assigned</p>';
+        } else {
+            itemsList.innerHTML = unassignedItems.map(item => `
+                <label class="checkbox-item">
+                    <input type="checkbox" value="${item.id}">
+                    <span>${item.name} - $${item.value || 0}</span>
+                </label>
+            `).join('');
+        }
+
+        this.openModal('bulk-assignment-modal');
+    }
+
+    /**
+     * Submit bulk assignment
+     */
+    async submitBulkAssignment() {
+        const assignee = document.getElementById('bulk-assignee').value;
+        const reason = document.getElementById('bulk-assignment-reason').value;
+
+        if (!assignee) {
+            this.showMessage('Please select a family member', 'error');
+            return;
+        }
+
+        const selectedItems = Array.from(document.querySelectorAll('#bulk-items-list input:checked'))
+            .map(input => input.value);
+
+        if (selectedItems.length === 0) {
+            this.showMessage('Please select at least one item', 'error');
+            return;
+        }
+
+        try {
+            // Assign each item
+            const promises = selectedItems.map(itemId =>
+                fetch(`/api/items/${itemId}`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        assigned_to: assignee,
+                        assignment_reason: reason
+                    })
+                })
+            );
+
+            await Promise.all(promises);
+
+            this.showMessage(`Assigned ${selectedItems.length} item(s) successfully`, 'success');
+            this.closeModal('bulk-assignment-modal');
+            await this.loadLegacy();
+        } catch (error) {
+            console.error('Error in bulk assignment:', error);
+            this.showMessage('Failed to assign items', 'error');
+        }
+    }
+
+    /**
+     * Add sentimental story to item
+     */
+    addItemStory(itemId) {
+        // TODO: Implement story/sentimental value modal
+        this.showMessage('Story feature coming soon!', 'info');
+    }
+
+    /**
      * Show loading overlay
      */
     showLoading(text = 'Loading...') {
@@ -1745,10 +2157,10 @@ class MyEstateAllyApp {
     updateEstateSelector(estates, currentEstateId) {
         const select = document.getElementById('estate-select');
         if (!select) return;
-        
+
         // Clear existing options
         select.innerHTML = '<option value="">Select Estate...</option>';
-        
+
         // Add estates
         estates.forEach(estate => {
             const option = document.createElement('option');
@@ -1762,6 +2174,33 @@ class MyEstateAllyApp {
             }
             select.appendChild(option);
         });
+
+        // Also populate mobile estate dropdown
+        const mobileDropdown = document.getElementById('mobile-estate-dropdown');
+        if (mobileDropdown) {
+            mobileDropdown.innerHTML = '<option value="">Select Estate...</option>';
+            estates.forEach(estate => {
+                const option = document.createElement('option');
+                option.value = estate.id;
+                option.textContent = estate.name;
+                if (estate.user_role === 'owner') {
+                    option.textContent += ' (Owner)';
+                }
+                option.selected = (estate.id === currentEstateId);
+                mobileDropdown.appendChild(option);
+            });
+        }
+
+        // Update mobile estate indicator
+        const mobileEstateIndicator = document.getElementById('mobile-estate-indicator');
+        const estateNameMobile = document.getElementById('estate-name-mobile');
+        if (mobileEstateIndicator && estateNameMobile && currentEstateId) {
+            const currentEstate = estates.find(e => e.id === currentEstateId);
+            if (currentEstate) {
+                estateNameMobile.textContent = currentEstate.name;
+                mobileEstateIndicator.style.display = 'flex';
+            }
+        }
     }
 
     /**
@@ -1903,11 +2342,19 @@ class MyEstateAllyApp {
             if (data.success) {
                 this.showMessage('Estate created successfully!', 'success');
                 this.closeModal('create-estate-modal');
+                this.closeModal('welcome-modal');
                 document.getElementById('estate-name').value = '';
-                
+
+                // Re-enable UI for first-time users who just created their first estate
+                const mainContent = document.querySelector('.main');
+                if (mainContent) {
+                    mainContent.style.pointerEvents = 'auto';
+                    mainContent.style.opacity = '1';
+                }
+
                 // Reload estates
                 await this.checkAuthStatus();
-                
+
                 // Reload inventory and other data
                 this.loadInventory();
                 this.loadFamilyData();
@@ -2001,6 +2448,10 @@ class MyEstateAllyApp {
                 this.currentUser = null;
                 this.updateAuthUI(false);
                 this.showMessage('Logged out successfully', 'success');
+
+                // Open login modal so user can log back in
+                this.openModal('auth-modal');
+
                 return true;
             } else {
                 throw new Error(data.error || 'Logout failed');
@@ -2017,6 +2468,7 @@ class MyEstateAllyApp {
      */
     async loginWithGoogle() {
         try {
+            console.log('Redirecting to Google OAuth...');
             window.location.href = '/auth/google/login';
         } catch (error) {
             console.error('Google login error:', error);
@@ -3108,14 +3560,24 @@ function switchAuthTab(tab) {
 }
 
 function loginWithGoogle() {
+    console.log('loginWithGoogle() called, window.app exists:', !!window.app);
     if (window.app) {
         window.app.loginWithGoogle();
+    } else {
+        console.error('App not initialized yet. Trying direct redirect...');
+        // Fallback: direct redirect if app not initialized
+        window.location.href = '/auth/google/login';
     }
 }
 
 function loginWithFacebook() {
+    console.log('loginWithFacebook() called, window.app exists:', !!window.app);
     if (window.app) {
         window.app.loginWithFacebook();
+    } else {
+        console.error('App not initialized yet. Trying direct redirect...');
+        // Fallback: direct redirect if app not initialized
+        window.location.href = '/auth/facebook/login';
     }
 }
 
@@ -3126,20 +3588,480 @@ function logout() {
 }
 
 function showUserProfile() {
-    // TODO: Implement user profile modal
-    app.showMessage('User profile coming soon!', 'info');
+    if (window.app) {
+        window.app.showUserProfile();
+    }
 }
 
 function showAccountSettings() {
-    // TODO: Implement account settings modal
-    app.showMessage('Account settings coming soon!', 'info');
+    if (window.app) {
+        window.app.showAccountSettings();
+    }
 }
+
+// ============================================================================
+// USER PROFILE & ACCOUNT SETTINGS METHODS
+// ============================================================================
+
+MyEstateAllyApp.prototype.showUserProfile = async function() {
+    try {
+        const response = await fetch('/api/user/profile');
+        const data = await response.json();
+
+        if (data.success && data.user) {
+            const user = data.user;
+
+            document.getElementById('profile-name').value = user.name || '';
+            document.getElementById('profile-email').value = user.email || '';
+
+            const providerMap = {
+                'email': 'Email/Password',
+                'google': 'Google OAuth',
+                'facebook': 'Facebook',
+                'demo': 'Demo Account'
+            };
+            document.getElementById('profile-provider').value = providerMap[user.provider] || user.provider;
+
+            const accountTypeMap = {
+                'free': 'Free',
+                'premium': 'Premium',
+                'beta': 'Beta Tester'
+            };
+            let accountType = accountTypeMap[user.account_type] || 'Free';
+            if (user.grandfathered) {
+                accountType += ' (Grandfathered)';
+            }
+            document.getElementById('profile-account-type').value = accountType;
+
+            if (user.created_at) {
+                const date = new Date(user.created_at);
+                document.getElementById('profile-created').value = date.toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+            }
+
+            this.openModal('user-profile-modal');
+        } else {
+            this.showMessage(data.error || 'Failed to load profile', 'error');
+        }
+    } catch (error) {
+        console.error('Error loading profile:', error);
+        this.showMessage('Failed to load profile', 'error');
+    }
+};
+
+MyEstateAllyApp.prototype.saveUserProfile = async function(event) {
+    event.preventDefault();
+
+    const name = document.getElementById('profile-name').value.trim();
+
+    if (!name || name.length < 2) {
+        this.showMessage('Name must be at least 2 characters', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/user/profile', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            if (this.currentUser) {
+                this.currentUser.name = data.user.name;
+            }
+
+            const userName = document.getElementById('user-name');
+            if (userName) {
+                userName.textContent = data.user.name;
+            }
+
+            this.showMessage('Profile updated successfully!', 'success');
+            this.closeModal('user-profile-modal');
+        } else {
+            this.showMessage(data.error || 'Failed to update profile', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving profile:', error);
+        this.showMessage('Failed to update profile', 'error');
+    }
+};
+
+MyEstateAllyApp.prototype.showAccountSettings = async function() {
+    try {
+        const response = await fetch('/api/user/profile');
+        const data = await response.json();
+
+        if (data.success && data.user) {
+            const user = data.user;
+
+            const accountTypeMap = {
+                'free': 'Free',
+                'premium': 'Premium',
+                'beta': 'Beta Tester'
+            };
+            let accountType = accountTypeMap[user.account_type] || 'Free';
+            if (user.grandfathered) {
+                accountType += ' (Grandfathered)';
+            }
+            document.getElementById('settings-account-type').textContent = accountType;
+
+            if (user.created_at) {
+                const date = new Date(user.created_at);
+                document.getElementById('settings-created-date').textContent = date.toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+            }
+
+            document.getElementById('settings-user-id').textContent = user.id;
+
+            const mfaEnabled = user.mfa_enabled || false;
+            const mfaStatusText = document.getElementById('mfa-status-text');
+            const mfaToggleBtn = document.getElementById('mfa-toggle-btn');
+
+            if (mfaEnabled) {
+                mfaStatusText.innerHTML = '<i class="fas fa-check-circle" style="color: var(--success-color);"></i> Enabled';
+                mfaToggleBtn.innerHTML = '<i class="fas fa-times"></i> Disable 2FA';
+                mfaToggleBtn.className = 'btn danger';
+            } else {
+                mfaStatusText.innerHTML = '<i class="fas fa-times-circle" style="color: var(--text-muted);"></i> Not enabled';
+                mfaToggleBtn.innerHTML = '<i class="fas fa-mobile-alt"></i> Enable 2FA';
+                mfaToggleBtn.className = 'btn secondary';
+            }
+
+            const passwordContainer = document.getElementById('password-change-container');
+            if (user.provider === 'email') {
+                passwordContainer.style.display = 'block';
+            } else {
+                passwordContainer.style.display = 'none';
+            }
+
+            const deleteMfaGroup = document.getElementById('delete-mfa-group');
+            if (mfaEnabled) {
+                deleteMfaGroup.style.display = 'block';
+                document.getElementById('delete-mfa-code').required = true;
+            } else {
+                deleteMfaGroup.style.display = 'none';
+                document.getElementById('delete-mfa-code').required = false;
+            }
+
+            const deletePasswordGroup = document.getElementById('delete-password-group');
+            if (user.provider === 'email') {
+                deletePasswordGroup.style.display = 'block';
+                document.getElementById('delete-password').required = true;
+            } else {
+                deletePasswordGroup.style.display = 'none';
+                document.getElementById('delete-password').required = false;
+            }
+
+            this.openModal('account-settings-modal');
+        } else {
+            this.showMessage(data.error || 'Failed to load settings', 'error');
+        }
+    } catch (error) {
+        console.error('Error loading settings:', error);
+        this.showMessage('Failed to load settings', 'error');
+    }
+};
+
+MyEstateAllyApp.prototype.showChangePassword = function() {
+    document.getElementById('password-change-form-container').style.display = 'block';
+    document.getElementById('password-change-form-container').scrollIntoView({ behavior: 'smooth' });
+};
+
+MyEstateAllyApp.prototype.hideChangePassword = function() {
+    document.getElementById('password-change-form-container').style.display = 'none';
+    document.getElementById('change-password-form').reset();
+};
+
+MyEstateAllyApp.prototype.changePassword = async function(event) {
+    event.preventDefault();
+
+    const currentPassword = document.getElementById('current-password').value;
+    const newPassword = document.getElementById('new-password').value;
+    const confirmPassword = document.getElementById('confirm-new-password').value;
+
+    if (newPassword !== confirmPassword) {
+        this.showMessage('New passwords do not match', 'error');
+        return;
+    }
+
+    if (newPassword.length < 8) {
+        this.showMessage('Password must be at least 8 characters', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/user/change-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                current_password: currentPassword,
+                new_password: newPassword
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            this.showMessage('Password changed successfully!', 'success');
+            this.hideChangePassword();
+            document.getElementById('change-password-form').reset();
+        } else {
+            this.showMessage(data.error || 'Failed to change password', 'error');
+        }
+    } catch (error) {
+        console.error('Error changing password:', error);
+        this.showMessage('Failed to change password', 'error');
+    }
+};
+
+MyEstateAllyApp.prototype.toggleMFA = async function() {
+    try {
+        const profileResponse = await fetch('/api/user/profile');
+        const profileData = await profileResponse.json();
+
+        if (!profileData.success) {
+            this.showMessage('Failed to check MFA status', 'error');
+            return;
+        }
+
+        const mfaEnabled = profileData.user.mfa_enabled || false;
+
+        if (mfaEnabled) {
+            this.disableMFA();
+        } else {
+            this.setupMFA();
+        }
+    } catch (error) {
+        console.error('Error toggling MFA:', error);
+        this.showMessage('Failed to toggle MFA', 'error');
+    }
+};
+
+MyEstateAllyApp.prototype.setupMFA = async function() {
+    try {
+        const response = await fetch('/api/user/toggle-mfa', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'enable' })
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.action === 'setup') {
+            this.mfaSetupData = {
+                secret: data.mfa_secret
+            };
+
+            const qrCodeDiv = document.getElementById('mfa-qr-code');
+            qrCodeDiv.innerHTML = `<img src="${data.qr_code}" alt="MFA QR Code" style="max-width: 250px;">`;
+
+            document.getElementById('mfa-secret-display').textContent = data.mfa_secret;
+
+            this.openModal('mfa-setup-modal');
+        } else {
+            this.showMessage(data.error || 'Failed to setup MFA', 'error');
+        }
+    } catch (error) {
+        console.error('Error setting up MFA:', error);
+        this.showMessage('Failed to setup MFA', 'error');
+    }
+};
+
+MyEstateAllyApp.prototype.verifyMFASetup = async function(event) {
+    event.preventDefault();
+
+    const code = document.getElementById('mfa-verification-code').value;
+
+    if (!this.mfaSetupData || !this.mfaSetupData.secret) {
+        this.showMessage('MFA setup data not found', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/user/toggle-mfa', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'verify_enable',
+                mfa_secret: this.mfaSetupData.secret,
+                code: code
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            this.showMessage('Two-factor authentication enabled successfully!', 'success');
+            this.closeModal('mfa-setup-modal');
+            this.closeModal('account-settings-modal');
+            delete this.mfaSetupData;
+        } else {
+            this.showMessage(data.error || 'Invalid verification code', 'error');
+        }
+    } catch (error) {
+        console.error('Error verifying MFA:', error);
+        this.showMessage('Failed to verify MFA code', 'error');
+    }
+};
+
+MyEstateAllyApp.prototype.cancelMFASetup = function() {
+    delete this.mfaSetupData;
+    this.closeModal('mfa-setup-modal');
+    document.getElementById('mfa-verify-form').reset();
+};
+
+MyEstateAllyApp.prototype.copyMFASecret = function() {
+    const secretText = document.getElementById('mfa-secret-display').textContent;
+    navigator.clipboard.writeText(secretText).then(() => {
+        this.showMessage('Secret copied to clipboard!', 'success');
+    }).catch(() => {
+        this.showMessage('Failed to copy secret', 'error');
+    });
+};
+
+MyEstateAllyApp.prototype.disableMFA = async function() {
+    const confirmed = confirm('Are you sure you want to disable two-factor authentication? This will make your account less secure.');
+
+    if (!confirmed) return;
+
+    const verification = prompt('Enter your password or current 2FA code to confirm:');
+
+    if (!verification) return;
+
+    try {
+        const isMFACode = /^\d{6}$/.test(verification);
+
+        const payload = {
+            action: 'disable'
+        };
+
+        if (isMFACode) {
+            payload.code = verification;
+        } else {
+            payload.password = verification;
+        }
+
+        const response = await fetch('/api/user/toggle-mfa', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            this.showMessage('Two-factor authentication disabled', 'success');
+            this.closeModal('account-settings-modal');
+        } else {
+            this.showMessage(data.error || 'Failed to disable MFA', 'error');
+        }
+    } catch (error) {
+        console.error('Error disabling MFA:', error);
+        this.showMessage('Failed to disable MFA', 'error');
+    }
+};
+
+MyEstateAllyApp.prototype.exportAccountData = async function() {
+    try {
+        this.showMessage('Preparing your data export...', 'info');
+
+        const response = await fetch('/api/user/export-data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            const blob = new Blob([data.data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = data.filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            this.showMessage('Data exported successfully!', 'success');
+        } else {
+            this.showMessage(data.error || 'Failed to export data', 'error');
+        }
+    } catch (error) {
+        console.error('Error exporting data:', error);
+        this.showMessage('Failed to export data', 'error');
+    }
+};
+
+MyEstateAllyApp.prototype.confirmDeleteAccount = function() {
+    this.openModal('delete-account-modal');
+    document.getElementById('delete-account-form').reset();
+};
+
+MyEstateAllyApp.prototype.deleteAccount = async function(event) {
+    event.preventDefault();
+
+    const password = document.getElementById('delete-password').value;
+    const mfaCode = document.getElementById('delete-mfa-code').value;
+    const confirmation = document.getElementById('delete-confirmation').value;
+
+    if (confirmation.toUpperCase() !== 'DELETE MY ACCOUNT') {
+        this.showMessage('Please type "DELETE MY ACCOUNT" exactly to confirm', 'error');
+        return;
+    }
+
+    const finalConfirm = confirm('This is your last chance. Are you absolutely sure you want to permanently delete your account? This cannot be undone.');
+
+    if (!finalConfirm) return;
+
+    try {
+        const response = await fetch('/api/user/account', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                password: password,
+                mfa_code: mfaCode,
+                confirmation: confirmation
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            this.showMessage('Account deleted successfully. Goodbye.', 'success');
+
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 2000);
+        } else {
+            this.showMessage(data.error || 'Failed to delete account', 'error');
+        }
+    } catch (error) {
+        console.error('Error deleting account:', error);
+        this.showMessage('Failed to delete account', 'error');
+    }
+};
 
 // ============================================================================
 // DOCUMENT MANAGEMENT METHODS
 // ============================================================================
 
 MyEstateAllyApp.prototype.loadDocuments = async function() {
+    // Guard: Skip if not authenticated
+    if (!this.currentUser) {
+        console.log('Skipping documents load - user not authenticated');
+        return;
+    }
+
     try {
         const response = await fetch('/api/documents');
         const data = await response.json();
@@ -3202,6 +4124,9 @@ MyEstateAllyApp.prototype.displayDocuments = function() {
                     ${doc.description ? `<p class="document-description">${doc.description}</p>` : ''}
                 </div>
                 <div class="document-actions">
+                    <button class="btn-icon" onclick="app.previewDocument('${doc.id}')" title="Preview">
+                        <i class="fas fa-eye"></i>
+                    </button>
                     <button class="btn-icon" onclick="app.downloadDocument('${doc.id}')" title="Download">
                         <i class="fas fa-download"></i>
                     </button>
@@ -3318,6 +4243,140 @@ MyEstateAllyApp.prototype.downloadDocument = async function(docId) {
     } finally {
         this.hideLoading();
     }
+};
+
+MyEstateAllyApp.prototype.previewDocument = function(docId) {
+    // Find document in current documents list
+    const doc = this.documents.find(d => d.id === docId);
+    if (!doc) {
+        this.showMessage('Document not found', 'error');
+        return;
+    }
+
+    // Store current document ID for download fallback
+    this.currentPreviewDocId = docId;
+
+    // Show modal and loading state
+    document.getElementById('preview-document-modal').style.display = 'flex';
+    document.getElementById('preview-loading').style.display = 'flex';
+    document.getElementById('preview-error').style.display = 'none';
+    document.getElementById('preview-iframe').style.display = 'none';
+    document.getElementById('preview-image').style.display = 'none';
+
+    // Update modal title
+    document.getElementById('preview-document-title').innerHTML =
+        `<i class="fas fa-eye"></i> ${doc.filename}`;
+
+    // Set up download button
+    const downloadBtn = document.getElementById('preview-download-btn');
+    downloadBtn.onclick = () => this.downloadDocument(docId);
+
+    // Set up fallback download button
+    const fallbackBtn = document.getElementById('preview-download-fallback');
+    fallbackBtn.onclick = () => {
+        this.closePreviewModal();
+        this.downloadDocument(docId);
+    };
+
+    // Determine file type and preview accordingly
+    const extension = doc.filename.split('.').pop().toLowerCase();
+
+    if (extension === 'pdf') {
+        this.previewPDF(docId, doc.filename);
+    } else if (['jpg', 'jpeg', 'png', 'gif'].includes(extension)) {
+        this.previewImage(docId, doc.filename);
+    } else {
+        // Unsupported file type
+        this.showPreviewError(
+            `Preview not available for ${extension.toUpperCase()} files. Please download to view.`,
+            true
+        );
+    }
+};
+
+MyEstateAllyApp.prototype.previewPDF = function(docId, filename) {
+    const iframe = document.getElementById('preview-iframe');
+    const loading = document.getElementById('preview-loading');
+
+    // Set iframe source
+    iframe.src = `/api/documents/${docId}/preview`;
+
+    // Handle iframe load
+    iframe.onload = () => {
+        loading.style.display = 'none';
+        iframe.style.display = 'block';
+    };
+
+    // Handle iframe error
+    iframe.onerror = () => {
+        this.showPreviewError('Failed to load PDF preview. Try downloading instead.', true);
+    };
+
+    // Timeout after 30 seconds
+    setTimeout(() => {
+        if (loading.style.display !== 'none') {
+            this.showPreviewError('Preview timed out. Try downloading instead.', true);
+        }
+    }, 30000);
+};
+
+MyEstateAllyApp.prototype.previewImage = function(docId, filename) {
+    const img = document.getElementById('preview-image');
+    const loading = document.getElementById('preview-loading');
+
+    // Set image source
+    img.src = `/api/documents/${docId}/preview`;
+
+    // Handle image load
+    img.onload = () => {
+        loading.style.display = 'none';
+        img.style.display = 'block';
+    };
+
+    // Handle image error
+    img.onerror = () => {
+        this.showPreviewError('Failed to load image preview. Try downloading instead.', true);
+    };
+
+    // Timeout after 30 seconds
+    setTimeout(() => {
+        if (loading.style.display !== 'none') {
+            this.showPreviewError('Preview timed out. Try downloading instead.', true);
+        }
+    }, 30000);
+};
+
+MyEstateAllyApp.prototype.showPreviewError = function(message, showDownload = false) {
+    document.getElementById('preview-loading').style.display = 'none';
+    document.getElementById('preview-iframe').style.display = 'none';
+    document.getElementById('preview-image').style.display = 'none';
+    document.getElementById('preview-error').style.display = 'flex';
+    document.getElementById('preview-error-message').textContent = message;
+
+    const fallbackBtn = document.getElementById('preview-download-fallback');
+    fallbackBtn.style.display = showDownload ? 'inline-block' : 'none';
+};
+
+MyEstateAllyApp.prototype.closePreviewModal = function() {
+    const modal = document.getElementById('preview-document-modal');
+    const iframe = document.getElementById('preview-iframe');
+    const img = document.getElementById('preview-image');
+
+    // Clear iframe and image sources to stop loading
+    iframe.src = '';
+    img.src = '';
+
+    // Hide modal
+    modal.style.display = 'none';
+
+    // Reset states
+    document.getElementById('preview-loading').style.display = 'flex';
+    document.getElementById('preview-error').style.display = 'none';
+    iframe.style.display = 'none';
+    img.style.display = 'none';
+
+    // Clear current preview doc ID
+    this.currentPreviewDocId = null;
 };
 
 MyEstateAllyApp.prototype.deleteDocument = async function(docId) {
@@ -3851,9 +4910,97 @@ MyEstateAllyApp.prototype.applyAIValuation = function() {
     }
 };
 
+/**
+ * Toggle mobile navigation menu
+ */
+MyEstateAllyApp.prototype.toggleMobileMenu = function() {
+    const navContent = document.getElementById('nav-content');
+    const menuBtn = document.getElementById('mobile-menu-btn');
+    const isActive = navContent.classList.contains('mobile-active');
+
+    if (isActive) {
+        navContent.classList.remove('mobile-active');
+        menuBtn.innerHTML = '<i class="fas fa-bars"></i>';
+    } else {
+        navContent.classList.add('mobile-active');
+        menuBtn.innerHTML = '<i class="fas fa-times"></i>';
+    }
+};
+
+/**
+ * Close mobile menu when a nav button is clicked
+ */
+MyEstateAllyApp.prototype.closeMobileMenu = function() {
+    const navContent = document.getElementById('nav-content');
+    const menuBtn = document.getElementById('mobile-menu-btn');
+
+    if (navContent.classList.contains('mobile-active')) {
+        navContent.classList.remove('mobile-active');
+        menuBtn.innerHTML = '<i class="fas fa-bars"></i>';
+    }
+};
+
+/**
+ * Set active state for bottom navigation
+ */
+MyEstateAllyApp.prototype.setActiveBottomNav = function(clickedBtn) {
+    const allBtns = document.querySelectorAll('.bottom-nav-btn');
+    allBtns.forEach(btn => btn.classList.remove('active'));
+
+    if (clickedBtn) {
+        clickedBtn.classList.add('active');
+    }
+};
+
+/**
+ * Open mobile more menu
+ */
+MyEstateAllyApp.prototype.openMobileMoreMenu = function() {
+    const moreMenu = document.getElementById('mobile-more-menu');
+    moreMenu.style.display = 'block';
+
+    // Add backdrop
+    const backdrop = document.createElement('div');
+    backdrop.id = 'more-menu-backdrop';
+    backdrop.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000;';
+    backdrop.onclick = () => this.closeMobileMoreMenu();
+    document.body.appendChild(backdrop);
+
+    // Prevent body scroll
+    document.body.style.overflow = 'hidden';
+};
+
+/**
+ * Close mobile more menu
+ */
+MyEstateAllyApp.prototype.closeMobileMoreMenu = function() {
+    const moreMenu = document.getElementById('mobile-more-menu');
+    moreMenu.style.display = 'none';
+
+    // Remove backdrop
+    const backdrop = document.getElementById('more-menu-backdrop');
+    if (backdrop) {
+        backdrop.remove();
+    }
+
+    // Restore body scroll
+    document.body.style.overflow = '';
+};
+
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.app = new MyEstateAllyApp();
     console.log('MyEstateAlly app ready!');
+
+    // Global escape key handler for modals
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            // Close preview modal if open
+            const previewModal = document.getElementById('preview-document-modal');
+            if (previewModal && previewModal.style.display === 'flex') {
+                window.app.closePreviewModal();
+            }
+        }
+    });
 });
 
