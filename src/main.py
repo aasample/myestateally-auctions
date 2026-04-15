@@ -6337,7 +6337,7 @@ Replace the 0 placeholders with actual numeric USD estimates based on current re
             except Exception as img_err:
                 logger.warning(f"Skipping malformed photo in AI lookup: {img_err}")
 
-        gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gemini_api_key}"
+        gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_api_key}"
         gemini_payload = {
             "contents": [{"parts": parts}],
             "generationConfig": {
