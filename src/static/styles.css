@@ -1002,6 +1002,29 @@ a:hover {
     line-height: 1.7;
 }
 
+/* Mission Card (inherits .welcome-card base styles) */
+.mission-card h2 {
+    color: white;
+    margin-bottom: var(--spacing-lg);
+    font-size: var(--font-size-2xl);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.mission-card h2 i {
+    font-size: 1.2rem;
+    opacity: 0.9;
+}
+
+.mission-card p {
+    margin-bottom: var(--spacing-md);
+}
+
+.mission-card p:last-child {
+    margin-bottom: 0;
+}
+
 /* Hero Upload Section */
 .hero-upload {
     background: var(--bg-secondary);
@@ -1502,6 +1525,52 @@ a:hover {
     font-weight: 500;
 }
 
+.family-badge {
+    display: inline-block;
+    background: var(--warning-color);
+    color: white;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    margin-bottom: var(--spacing-xs);
+}
+
+.charity-badge {
+    display: inline-block;
+    background: #ea580c;
+    color: white;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    margin-bottom: var(--spacing-xs);
+}
+
+.field-hint {
+    display: block;
+    font-size: var(--font-size-xs);
+    color: var(--text-light);
+    font-weight: 400;
+    margin-top: 2px;
+}
+
+.family-history-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--primary-light);
+    color: var(--primary-color);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+}
+
+.family-history-indicator i {
+    font-size: 0.65rem;
+}
+
 /* Family Sharing Styles */
 .family-overview {
     margin-bottom: var(--spacing-xl);
@@ -1938,6 +2007,31 @@ input:checked + .slider:before {
 
 .modal-body {
     padding: var(--spacing-lg);
+}
+
+/* Forgot Password success message */
+.auth-success-msg {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-lg);
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: var(--radius-lg);
+    color: #166534;
+}
+
+.auth-success-msg i {
+    font-size: 2rem;
+    color: #22c55e;
+}
+
+.auth-success-msg p {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.5;
 }
 
 /* Document Preview Modal */
@@ -4160,6 +4254,62 @@ input:checked + .slider:before {
     border-radius: var(--radius-md);
 }
 
+.apply-price-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    margin-top: var(--spacing-md);
+    padding: var(--spacing-sm) var(--spacing-lg);
+    background: rgba(255, 255, 255, 0.25);
+    color: white;
+    border: 2px solid rgba(255, 255, 255, 0.7);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+}
+
+.apply-price-btn:hover {
+    background: rgba(255, 255, 255, 0.4);
+    transform: translateY(-1px);
+}
+
+.apply-price-btn:active {
+    transform: translateY(0);
+}
+
+.apply-price-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Inline value editing on inventory cards */
+.item-value-editable {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    border-radius: var(--radius-sm);
+    padding: 1px 4px;
+    transition: background 0.15s;
+}
+
+.item-value-editable:hover {
+    background: rgba(var(--primary-rgb, 99, 102, 241), 0.08);
+}
+
+.item-value-edit-icon {
+    font-size: 0.65em;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.item-value-editable:hover .item-value-edit-icon {
+    opacity: 0.6;
+}
+
 /* Pricing Loading */
 .pricing-loading {
     text-align: center;
@@ -4905,8 +5055,9 @@ p {
 }
 
 .btn-icon {
-    width: 40px;
     height: 40px;
+    padding: 0 12px;
+    gap: 6px;
     border: none;
     background: var(--primary-light);
     color: var(--primary-color);
@@ -4915,6 +5066,8 @@ p {
     display: flex;
     align-items: center;
     justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 500;
     transition: all 0.3s ease;
 }
 
@@ -5265,7 +5418,7 @@ p {
     left: 0;
     right: 0;
     background: white;
-    border-top: 1px solid var(--border-light);
+    border-top: 2px solid var(--primary-color);
     box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
     z-index: 999;
     padding: 8px 0;
@@ -5418,7 +5571,7 @@ p {
 
     .header-content {
         flex-direction: row !important;
-        justify-content: center;
+        justify-content: space-between;
         text-align: left !important;
         gap: 0 !important;
     }
@@ -5472,18 +5625,17 @@ p {
         color: var(--text-dark);
     }
 
-    /* Mobile Estate Indicator in Header */
+    /* Estate Indicator in Header (hamburger + estate name) */
     .mobile-estate-indicator {
-        display: none; /* Hidden on desktop */
+        display: none; /* Shown via JS when authenticated */
         align-items: center;
         gap: 8px;
         padding: 8px 12px;
         background: var(--bg-lighter);
         border-radius: 8px;
         cursor: pointer;
-        flex: 1;
-        justify-content: center;
-        max-width: 200px;
+        justify-content: flex-start;
+        max-width: 250px;
     }
 
     .mobile-estate-indicator:hover {
@@ -5500,13 +5652,14 @@ p {
     }
 
     .mobile-estate-indicator i {
-        font-size: 0.75rem;
-        color: var(--text-medium);
+        font-size: 1.1rem;
+        color: var(--primary-color);
     }
 
     @media (max-width: 768px) {
         .mobile-estate-indicator {
             display: flex;
+            margin-right: auto; /* Push logo to right on mobile (header-actions is hidden) */
         }
     }
 
@@ -5913,7 +6066,7 @@ p {
     border-radius: 4px;
 }
 
-.btn-icon {
+.btn-icon-inline {
     background: none;
     border: none;
     color: var(--primary-color);
@@ -5922,7 +6075,7 @@ p {
     transition: color 0.2s;
 }
 
-.btn-icon:hover {
+.btn-icon-inline:hover {
     color: #1976d2;
 }
 
@@ -5954,4 +6107,206 @@ p {
         grid-template-columns: 1fr;
     }
 }
+}
+
+/* =================================
+   AI Lookup Button — Add Item Form
+   ================================= */
+
+.ai-lookup-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+}
+
+.btn.ai-lookup-btn {
+    background: linear-gradient(135deg, #7c3aed, #5b21b6);
+    color: white;
+    padding: var(--spacing-sm) var(--spacing-lg);
+    font-size: var(--font-size-sm);
+    min-height: 44px;
+    border-radius: var(--radius-md);
+    white-space: nowrap;
+    flex-shrink: 0;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn.ai-lookup-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #6d28d9, #4c1d95);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn.ai-lookup-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.ai-lookup-hint {
+    font-size: var(--font-size-sm);
+    color: var(--text-light);
+    font-style: italic;
+}
+
+/* =================================
+   Multi-Photo Upload — Add Item Form
+   ================================= */
+
+.item-photos-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-sm);
+    min-height: 0;
+}
+
+.photo-thumb-wrapper {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    border: 2px solid var(--border-medium);
+    flex-shrink: 0;
+}
+
+.photo-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.photo-thumb-remove {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    background: rgba(0, 0, 0, 0.65);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    font-size: 0.7rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.15s ease;
+}
+
+.photo-thumb-remove:hover {
+    background: var(--error-color);
+}
+
+.add-photo-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: 2px dashed var(--border-medium);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+    min-height: 44px;
+}
+
+.add-photo-btn:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    background: var(--bg-accent);
+}
+
+.add-photo-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ----- From Mobile: inline QR panel in Add Item modal ----- */
+
+.add-photo-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+}
+
+.add-photo-mobile-btn {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.mobile-photo-qr-panel {
+    margin-top: var(--spacing-sm);
+    padding: var(--spacing-md);
+    border: 2px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    background: var(--bg-secondary);
+    text-align: center;
+}
+
+.mobile-qr-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.mobile-qr-image {
+    width: 160px;
+    height: 160px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-medium);
+}
+
+.mobile-qr-label {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: var(--font-size-sm);
+    margin: 0;
+}
+
+.mobile-qr-hint {
+    color: var(--text-light);
+    font-size: 0.75rem;
+    margin: 0;
+    max-width: 240px;
+}
+
+.mobile-qr-waiting {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    color: var(--text-light);
+    font-size: var(--font-size-sm);
+}
+
+.mobile-qr-loading,
+.mobile-qr-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md);
+    color: var(--text-secondary);
+}
+
+.mobile-qr-loading i { font-size: 1.5rem; color: var(--primary-color); }
+.mobile-qr-error i { font-size: 1.5rem; color: var(--error-color); }
+
+.mobile-qr-cancel-btn {
+    border-style: solid;
+    color: var(--text-light);
+    border-color: var(--border-medium);
+    font-size: 0.75rem;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    min-height: 36px;
 }

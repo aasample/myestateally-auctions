@@ -32,6 +32,7 @@ import bcrypt
 import hashlib
 from dotenv import load_dotenv
 from src.utils.image_utils import compress_image_to_base64, compress_image_to_data_url
+from src.utils.validation import validate_password_strength
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -61,12 +62,9 @@ logger.info(f"Secret key configured: {SECRET_KEY[:10]}... (length: {len(SECRET_K
 app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
 app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', '587'))
 app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'true').lower() in ['true', 'on', '1']
-app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', '')
-app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
-app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', 'noreply@myestateally.com')
-
-# Initialize Flask-Mail
-mail = Mail(app)
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', '')  # Updated below after get_secret() is defined
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')  # Updated below after get_secret() is defined
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', 'MyEstateAlly <myestateally33@gmail.com>')
 
 # Initialize Rate Limiter
 limiter = Limiter(
@@ -88,6 +86,15 @@ app.config['WTF_CSRF_METHODS'] = ['POST', 'PUT', 'DELETE', 'PATCH']
 
 # Exempt OAuth callbacks from CSRF (they use state parameter instead)
 csrf.exempt('auth_google_callback')
+csrf.exempt('submit_photo_for_session')   # public mobile endpoint, no CSRF token
+
+# Session cookie configuration for OAuth compatibility
+# SameSite=Lax allows cross-site GET redirects (required for OAuth callbacks)
+# Secure=True ensures the cookie is only sent over HTTPS
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=10)  # Short-lived for OAuth handshake
 
 # Load environment variables
 load_dotenv()
@@ -106,6 +113,15 @@ def get_secret(secret_name):
     except Exception as e:
         logger.error(f"Failed to get secret {secret_name}: {e}")
         return None
+
+# Update email credentials from Secret Manager (now that get_secret is defined)
+if not app.config.get('MAIL_USERNAME'):
+    app.config['MAIL_USERNAME'] = get_secret('MAIL_USERNAME') or ''
+if not app.config.get('MAIL_PASSWORD'):
+    app.config['MAIL_PASSWORD'] = get_secret('MAIL_PASSWORD') or ''
+
+# Initialize Flask-Mail (after credentials are loaded from Secret Manager)
+mail = Mail(app)
 
 # Session Configuration - Use Flask's built-in sessions (simpler and more reliable)
 # Flask's built-in sessions use signed cookies which work well with the secret key
@@ -200,6 +216,17 @@ try:
         logger.warning("OPENAI_API_KEY not found - AI features will be disabled")
 except Exception as e:
     logger.error(f"Failed to initialize OpenAI client: {e}")
+
+# Gemini API key (used for AI Lookup via REST — no extra SDK needed)
+gemini_api_key = None
+try:
+    gemini_api_key = os.environ.get('GEMINI_API_KEY') or get_secret('GEMINI_API_KEY')
+    if gemini_api_key:
+        logger.info("Gemini API key loaded successfully")
+    else:
+        logger.warning("GEMINI_API_KEY not found - Gemini AI features will be disabled")
+except Exception as e:
+    logger.error(f"Failed to load Gemini API key: {e}")
 
 # Firestore (preferred on App Engine) setup
 try:
@@ -597,6 +624,8 @@ def validate_email(email):
         return False
     return True
 
+ALLOWED_DESTINATIONS = {'keep', 'sell', 'family', 'charity'}
+
 def sanitize_string(value, max_length=500):
     """Sanitize string input to prevent injection attacks"""
     if not isinstance(value, str):
@@ -608,7 +637,7 @@ def sanitize_string(value, max_length=500):
 # Allowed file extensions for uploads (security: whitelist approach)
 ALLOWED_UPLOAD_EXTENSIONS = {
     # Images
-    'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg',
+    'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'heic', 'heif',
     # Documents
     'pdf', 'doc', 'docx', 'txt', 'rtf', 'odt',
     # Spreadsheets
@@ -1166,7 +1195,19 @@ def add_item():
         name = sanitize_string(data.get('name', ''), max_length=200)
         category = sanitize_string(data.get('category', ''), max_length=100)
         description = sanitize_string(data.get('description', ''), max_length=2000)
-        assigned_to = sanitize_string(data.get('assignedTo', ''), max_length=100)
+        family_history = sanitize_string(data.get('familyHistory', ''), max_length=5000)
+        destination = data.get('destination', 'keep')
+        if destination not in ALLOWED_DESTINATIONS:
+            destination = 'keep'
+        destination_detail = sanitize_string(data.get('destinationDetail', ''), max_length=200)
+
+        # Handle photos array (base64 data URLs, up to 4 from multi-photo upload)
+        photos_raw = data.get('photos', [])
+        if not isinstance(photos_raw, list):
+            photos_raw = []
+        photos = [p for p in photos_raw[:4]
+                  if isinstance(p, str) and p.startswith('data:image') and len(p) <= 200000]
+        primary_photo = photos[0] if photos else data.get('photo', '')
 
         # Validate numeric value
         try:
@@ -1186,10 +1227,12 @@ def add_item():
             'name': name,
             'category': category,
             'description': description,
+            'familyHistory': family_history,
             'estimatedValue': estimated_value,
-            'forSale': bool(data.get('forSale', False)),
-            'assignedTo': assigned_to,
-            'photo': data.get('photo', ''),
+            'destination': destination,
+            'destinationDetail': destination_detail,
+            'photo': primary_photo,
+            'photos': photos,
             'dateAdded': datetime.now().isoformat(),
             'lastModified': datetime.now().isoformat()
         }
@@ -1258,9 +1301,15 @@ def update_item(item_id):
         item['name'] = data.get('name', item['name'])
         item['category'] = data.get('category', item['category'])
         item['description'] = data.get('description', item.get('description', ''))
+        item['familyHistory'] = sanitize_string(data.get('familyHistory', item.get('familyHistory', '')), max_length=5000)
         item['estimatedValue'] = float(data.get('estimatedValue', item.get('estimatedValue', 0)))
-        item['forSale'] = data.get('forSale', item.get('forSale', False))
-        item['assignedTo'] = data.get('assignedTo', item.get('assignedTo'))
+        dest = data.get('destination', item.get('destination', 'keep'))
+        if dest not in ALLOWED_DESTINATIONS:
+            dest = 'keep'
+        item['destination'] = dest
+        item['destinationDetail'] = sanitize_string(
+            data.get('destinationDetail', item.get('destinationDetail', '')), max_length=200
+        )
         item['lastModified'] = datetime.now().isoformat()
 
         # Handle photo update
@@ -1623,18 +1672,7 @@ def pricing_lookup():
         
         # Get item details from inventory if item_id provided
         if item_id:
-            item = None
-            # Try in-memory storage first
-            if item_id in inventory_storage:
-                item = inventory_storage[item_id]
-            else:
-                # Try JSON storage
-                try:
-                    fresh_storage = load_storage('inventory.json')
-                    if item_id in fresh_storage:
-                        item = fresh_storage[item_id]
-                except:
-                    pass
+            item = storage_service.get_document('inventory', item_id)
             
             if item:
                 item_name = item.get('name', item_name)
@@ -2519,12 +2557,10 @@ def generate_qr():
 
         # Store the current estate_id with this QR session so mobile uploads go to correct estate
         current_estate_id = get_current_estate_id()
-        if not hasattr(app, 'qr_sessions'):
-            app.qr_sessions = {}
-        app.qr_sessions[session_id] = {
+        storage_service.add_document('qr_sessions', session_id, {
             'estate_id': current_estate_id,
             'created_at': datetime.now().isoformat()
-        }
+        })
         logger.info(f"QR session {session_id} created for estate {current_estate_id}")
 
         # Create QR code with upload URL
@@ -2554,6 +2590,85 @@ def generate_qr():
             'success': False,
             'error': 'Failed to generate QR code'
         }), 500
+
+
+@app.route('/api/qr/photo-session', methods=['POST'])
+@require_auth
+@limiter.limit("30 per hour")
+def generate_photo_session_qr():
+    """Generate QR for inline photo capture in Add Item modal — no item creation."""
+    try:
+        session_id = str(uuid.uuid4())
+        current_estate_id = get_current_estate_id()
+        storage_service.add_document('qr_sessions', session_id, {
+            'estate_id': current_estate_id,
+            'created_at': datetime.now().isoformat(),
+            'mode': 'photo_only',
+            'photo': None
+        })
+        upload_url = f"{request.host_url}mobile-upload?session={session_id}&mode=addphoto"
+        qr = qrcode.QRCode(version=1, box_size=10, border=5)
+        qr.add_data(upload_url)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        buffer = BytesIO()
+        img.save(buffer, format='PNG')
+        img_str = base64.b64encode(buffer.getvalue()).decode()
+        return jsonify({'success': True, 'qr_code': f"data:image/png;base64,{img_str}", 'session_id': session_id})
+    except Exception as e:
+        logger.error(f"Error generating photo-session QR: {e}")
+        return jsonify({'success': False, 'error': 'Failed to generate QR code'}), 500
+
+
+@app.route('/api/qr/photo-submit/<session_id>', methods=['POST'])
+@limiter.limit("10 per hour")
+def submit_photo_for_session(session_id):
+    """Mobile uploads photo into a photo-only QR session (no item created)."""
+    try:
+        qr_session = storage_service.get_document('qr_sessions', session_id)
+        if not qr_session:
+            return jsonify({'success': False, 'error': 'Invalid or expired session'}), 400
+        if qr_session.get('mode') != 'photo_only':
+            return jsonify({'success': False, 'error': 'Invalid session mode'}), 400
+        if 'photo' not in request.files:
+            return jsonify({'success': False, 'error': 'No photo provided'}), 400
+        file = request.files['photo']
+        if not file.filename or not allowed_file(file.filename):
+            return jsonify({'success': False, 'error': 'Invalid file type'}), 400
+        filename = secure_filename(file.filename)
+        upload_dir = '/tmp/uploads' if os.environ.get('GAE_ENV') else os.path.join(tempfile.gettempdir(), 'uploads')
+        os.makedirs(upload_dir, exist_ok=True)
+        file_path = os.path.join(upload_dir, f"qr_{session_id}_{filename}")
+        file.save(file_path)
+        photo_base64 = compress_image_to_base64(file_path, max_size_kb=150)
+        storage_service.update_document('qr_sessions', session_id, {'photo': f"data:image/jpeg;base64,{photo_base64}"})
+        logger.info(f"Photo stored for photo-only session {session_id}")
+        return jsonify({'success': True})
+    except Exception as e:
+        logger.error(f"Error in photo-submit for session {session_id}: {e}")
+        return jsonify({'success': False, 'error': 'Upload failed'}), 500
+
+
+@app.route('/api/qr/photo-poll/<session_id>', methods=['GET'])
+@require_auth
+@limiter.limit("120 per hour")
+def poll_photo_session(session_id):
+    """Desktop polls here; returns photo and clears it once consumed."""
+    try:
+        qr_session = storage_service.get_document('qr_sessions', session_id)
+        if not qr_session:
+            return jsonify({'ready': False})
+        if qr_session.get('mode') != 'photo_only':
+            return jsonify({'ready': False})
+        photo = qr_session.get('photo')
+        if photo:
+            storage_service.update_document('qr_sessions', session_id, {'photo': None})  # consume once
+            return jsonify({'ready': True, 'photo': photo})
+        return jsonify({'ready': False})
+    except Exception as e:
+        logger.error(f"Error polling photo session {session_id}: {e}")
+        return jsonify({'ready': False}), 500
+
 
 @app.route('/mobile-upload')
 def mobile_upload():
@@ -3604,7 +3719,7 @@ def signup():
                     }), 400
 
         # Determine account type based on beta code
-        BETA_CODE = os.environ.get('BETA_CODE', 'ESTATEALLY2026')
+        BETA_CODE = os.environ.get('BETA_CODE') or get_secret('BETA_CODE') or 'ESTATEALLY2026'
         account_type = 'beta' if beta_code == BETA_CODE else 'free'
         grandfathered = (account_type == 'beta')
 
@@ -3681,6 +3796,154 @@ def signup():
             'success': False,
             'error': 'Signup failed'
         }), 500
+
+@app.route('/reset-password')
+def reset_password_page():
+    """Serve the app at /reset-password so JS can read ?token= from URL"""
+    return render_template('index.html')
+
+
+@app.route('/api/auth/forgot-password', methods=['POST'])
+@limiter.limit("3 per hour")
+def forgot_password():
+    """Send a password reset email with a time-limited token"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': True})  # Don't leak info
+
+        email = data.get('email', '').strip().lower()
+        if not email:
+            return jsonify({'success': True})  # Don't leak info
+
+        # Look up user by email
+        user = firestore_get_user_by_email(email)
+
+        # Only send reset for email/password accounts (not OAuth)
+        if user and user.get('provider', 'email') == 'email':
+            user_id = user['id']
+            token = secrets.token_urlsafe(32)
+            expires_at = (datetime.now() + timedelta(hours=1)).isoformat()
+
+            # Store token in Firestore
+            if USE_FIRESTORE and db:
+                db.collection('password_resets').document(token).set({
+                    'user_id': user_id,
+                    'email': email,
+                    'expires_at': expires_at,
+                    'created_at': datetime.now().isoformat()
+                })
+            else:
+                auth_storage['password_resets'][token] = {
+                    'user_id': user_id,
+                    'email': email,
+                    'expires_at': expires_at
+                }
+
+            # Build reset URL
+            base_url = os.environ.get('APP_BASE_URL', 'https://estateally-ai-services.ue.r.appspot.com')
+            reset_url = f"{base_url}/reset-password?token={token}"
+
+            # Send email
+            try:
+                msg = Message(
+                    subject='Reset your MyEstateAlly password',
+                    recipients=[email],
+                    html=f"""
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                        <div style="background: #2563eb; padding: 20px; border-radius: 8px 8px 0 0; text-align: center;">
+                            <h1 style="color: white; margin: 0; font-size: 24px;">🏠 MyEstateAlly</h1>
+                        </div>
+                        <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb;">
+                            <h2 style="color: #1f2937; margin-top: 0;">Reset Your Password</h2>
+                            <p style="color: #4b5563;">We received a request to reset the password for your MyEstateAlly account.</p>
+                            <p style="color: #4b5563;">Click the button below to set a new password. This link is valid for <strong>1 hour</strong>.</p>
+                            <div style="text-align: center; margin: 30px 0;">
+                                <a href="{reset_url}" style="background: #2563eb; color: white; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">Reset My Password</a>
+                            </div>
+                            <p style="color: #6b7280; font-size: 14px;">If you didn't request a password reset, you can safely ignore this email. Your password won't change.</p>
+                            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+                            <p style="color: #9ca3af; font-size: 12px; text-align: center;">MyEstateAlly · Your AI-Powered Estate Management Partner</p>
+                        </div>
+                    </div>
+                    """,
+                    body=f"Reset your MyEstateAlly password by visiting: {reset_url}\n\nThis link expires in 1 hour.\n\nIf you didn't request this, ignore this email."
+                )
+                mail.send(msg)
+                logger.info(f"Password reset email sent to {email}")
+            except Exception as mail_err:
+                # Log but don't fail — token is stored, user can retry
+                logger.warning(f"Password reset email failed to send: {mail_err}. Reset URL: {reset_url}")
+
+        # Always return success (prevent email enumeration)
+        return jsonify({'success': True, 'message': 'If that email is registered, you will receive a reset link shortly.'})
+
+    except Exception as e:
+        logger.error(f"Error in forgot_password: {e}")
+        return jsonify({'success': True})  # Don't leak errors
+
+
+@app.route('/api/auth/reset-password', methods=['POST'])
+@limiter.limit("5 per hour")
+def reset_password_submit():
+    """Validate a reset token and update the user's password"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Invalid request'}), 400
+
+        token = data.get('token', '').strip()
+        new_password = data.get('new_password', '')
+
+        if not token or not new_password:
+            return jsonify({'success': False, 'error': 'Token and new password are required'}), 400
+
+        # Look up token
+        token_data = None
+        if USE_FIRESTORE and db:
+            doc = db.collection('password_resets').document(token).get()
+            if doc.exists:
+                token_data = doc.to_dict()
+        else:
+            token_data = auth_storage['password_resets'].get(token)
+
+        if not token_data:
+            return jsonify({'success': False, 'error': 'Invalid or expired reset link'}), 400
+
+        # Check expiry
+        expires_at = datetime.fromisoformat(token_data['expires_at'])
+        if datetime.now() > expires_at:
+            # Clean up expired token
+            if USE_FIRESTORE and db:
+                db.collection('password_resets').document(token).delete()
+            else:
+                auth_storage['password_resets'].pop(token, None)
+            return jsonify({'success': False, 'error': 'This reset link has expired. Please request a new one.'}), 400
+
+        # Validate password strength
+        from src.utils.validation import validate_password_strength
+        is_valid, pw_error = validate_password_strength(new_password)
+        if not is_valid:
+            return jsonify({'success': False, 'error': pw_error}), 400
+
+        # Update password
+        user_id = token_data['user_id']
+        new_hash = hash_password(new_password)
+        firestore_update_user(user_id, {'password_hash': new_hash})
+
+        # Delete used token (single-use)
+        if USE_FIRESTORE and db:
+            db.collection('password_resets').document(token).delete()
+        else:
+            auth_storage['password_resets'].pop(token, None)
+
+        logger.info(f"Password reset successful for user {user_id}")
+        return jsonify({'success': True, 'message': 'Password reset successfully. Please sign in with your new password.'})
+
+    except Exception as e:
+        logger.error(f"Error in reset_password_submit: {e}")
+        return jsonify({'success': False, 'error': 'Reset failed. Please try again.'}), 500
+
 
 @app.route('/api/auth/google', methods=['GET'])
 def google_auth():
@@ -6005,6 +6268,122 @@ Respond with JSON:
             'error': 'Failed to perform AI search'
         }), 500
 
+@app.route('/api/ai/lookup-item', methods=['POST'])
+@require_auth
+@limiter.limit("30 per hour")
+def ai_lookup_item():
+    """Use Gemini 2.0 Flash to identify, categorize, and value a new item. Supports vision via photos."""
+    try:
+        if not gemini_api_key:
+            return jsonify({'success': False, 'error': 'AI features not available. Please configure GEMINI_API_KEY.'}), 503
+
+        data = request.get_json()
+        item_name = data.get('name', '').strip()
+        item_description = data.get('description', '').strip()
+        photos = data.get('photos', [])
+        if not isinstance(photos, list):
+            photos = []
+        raw_photos = [p for p in photos[:4] if isinstance(p, str) and p.startswith('data:image')]
+        photos = [p for p in raw_photos if len(p) <= 300000]
+        oversized_count = len(raw_photos) - len(photos)
+        if oversized_count:
+            logger.warning(f"AI lookup: dropped {oversized_count} oversized photo(s) (each was >{len(raw_photos[0])//1000}KB)")
+
+        if not item_name and not photos:
+            if oversized_count:
+                return jsonify({'success': False,
+                                'error': 'Photo could not be sent to AI — it is still too large after compression. '
+                                         'Please enter a name or description to help identify the item.'}), 400
+            return jsonify({'success': False, 'error': 'Item name or at least one photo is required'}), 400
+
+        categories = [
+            "Furniture", "Jewelry", "Art", "Electronics", "Collectibles",
+            "Clothing", "Books", "Kitchen", "Tools", "Other"
+        ]
+
+        name_clause = f"Item Name: {item_name}" if item_name else "Item Name: (identify from the photos)"
+        desc_clause = f"Additional context: {item_description}" if item_description else ""
+        photo_instruction = f"Examine the {len(photos)} provided photo(s) carefully to identify the item." if photos else ""
+
+        prompt = f"""You are an expert estate appraiser helping catalog personal property for estate management.
+
+{name_clause}
+{desc_clause}
+{photo_instruction}
+
+Categories to choose from: {', '.join(categories)}
+
+Respond with JSON only (no markdown, no code fences):
+{{
+    "item_name": "the identified item name (refine or confirm the provided name, or identify from photos)",
+    "category": "one category from the list above",
+    "description": "a concise 1-2 sentence description of the item and its notable characteristics",
+    "estimated_value": 0,
+    "value_min": 0,
+    "value_max": 0,
+    "confidence": "high/medium/low",
+    "notes": "brief note on valuation basis or caveats"
+}}
+
+Replace the 0 placeholders with actual numeric USD estimates based on current resale market."""
+
+        # Build Gemini REST API request — no SDK needed, uses requests library
+        parts = [{"text": prompt}]
+        for photo_data_url in photos:
+            try:
+                header, b64data = photo_data_url.split(',', 1)
+                mime_type = header.split(':')[1].split(';')[0]  # e.g. image/jpeg
+                parts.append({"inline_data": {"mime_type": mime_type, "data": b64data}})
+            except Exception as img_err:
+                logger.warning(f"Skipping malformed photo in AI lookup: {img_err}")
+
+        gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gemini_api_key}"
+        gemini_payload = {
+            "contents": [{"parts": parts}],
+            "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 512,
+                "temperature": 0.2
+            }
+        }
+
+        import requests as req_lib
+        resp = req_lib.post(gemini_url, json=gemini_payload, timeout=30)
+        resp.raise_for_status()
+        gemini_data = resp.json()
+
+        candidates = gemini_data.get('candidates', [])
+        if not candidates:
+            logger.error(f"Gemini returned no candidates: {gemini_data}")
+            return jsonify({'success': False, 'error': 'AI returned no result. Try adding a name or description.'}), 503
+
+        parts = candidates[0].get('content', {}).get('parts', [])
+        if not parts:
+            return jsonify({'success': False, 'error': 'AI returned empty response. Please try again.'}), 503
+
+        raw_text = parts[0].get('text', '').strip()
+        # Strip markdown fences Gemini sometimes wraps around JSON
+        if raw_text.startswith('```'):
+            raw_text = raw_text.split('```')[1]
+            if raw_text.startswith('json'):
+                raw_text = raw_text[4:]
+        raw_text = raw_text.strip()
+
+        ai_response = json.loads(raw_text)
+        return jsonify({'success': True, 'lookup': ai_response})
+
+    except req_lib.exceptions.Timeout:
+        return jsonify({'success': False, 'error': 'AI lookup timed out. Try with fewer photos.'}), 504
+    except req_lib.exceptions.RequestException as e:
+        logger.error(f"Gemini API request failed: {e}")
+        return jsonify({'success': False, 'error': 'AI service unavailable. Please try again shortly.'}), 503
+    except (json.JSONDecodeError, KeyError, IndexError) as e:
+        logger.error(f"Failed to parse Gemini response: {e}")
+        return jsonify({'success': False, 'error': 'AI returned an unexpected format. Please try again.'}), 500
+    except Exception as e:
+        logger.error(f"Error with AI item lookup: {e}")
+        return jsonify({'success': False, 'error': 'AI lookup failed. Please try again.'}), 500
+
 @app.route('/api/estate/timeline', methods=['GET', 'POST'])
 @require_auth
 def estate_timeline():
@@ -7093,6 +7472,7 @@ def auth_google_login():
         for key in session_keys_to_remove:
             session.pop(key, None)
 
+        session.permanent = True  # Ensure the state cookie survives the round-trip to Google and back
         redirect_uri = OAUTH_CONFIG['google']['redirect_uri'] or url_for('auth_google_callback', _external=True)
         logger.info(f"Redirecting to Google OAuth with redirect_uri: {redirect_uri}")
         return oauth.google.authorize_redirect(redirect_uri)

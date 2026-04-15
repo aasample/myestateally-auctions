@@ -32,16 +32,15 @@
     <header class="header">
         <div class="container">
             <div class="header-content">
+                <!-- Mobile Estate Indicator (shown only on mobile) -->
+                <div class="mobile-estate-indicator" id="mobile-estate-indicator" onclick="app.openMobileMoreMenu()" style="display: none;">
+                    <i class="fas fa-bars"></i>
+                    <span class="estate-name-mobile" id="estate-name-mobile">Loading...</span>
+                </div>
+
                 <div class="logo" id="home-button" style="cursor: pointer;" title="Return to Dashboard">
                     <i class="fas fa-home"></i>
                     <span>MyEstateAlly</span>
-                    <span class="ai-badge">AI-Powered</span>
-                </div>
-
-                <!-- Mobile Estate Indicator (shown only on mobile) -->
-                <div class="mobile-estate-indicator" id="mobile-estate-indicator" onclick="app.openMobileMoreMenu()" style="display: none;">
-                    <span class="estate-name-mobile" id="estate-name-mobile">Loading...</span>
-                    <i class="fas fa-chevron-down"></i>
                 </div>
 
                 <div class="header-actions">
@@ -173,7 +172,37 @@
                 <!-- Welcome Card -->
                 <div class="welcome-card">
                     <h1>Welcome to MyEstateAlly!</h1>
-                    <p>Your AI-powered partner in estate management. Simplify your estate, secure your legacy.</p>
+                    <p>Honoring a legacy, simplified. MyEstateAlly helps you organize, value, and find new homes for the things that matter most.</p>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="quick-actions">
+                    <h3>Quick Actions</h3>
+                    <div class="actions-grid">
+                        <button class="action-btn" id="add-item-btn">
+                            <i class="fas fa-plus"></i>
+                            Add New Item
+                        </button>
+                        <button class="action-btn" id="ai-pricing-btn">
+                            <i class="fas fa-robot"></i>
+                            AI Price Lookup
+                        </button>
+                        <button class="action-btn" id="browse-inventory-btn">
+                            <i class="fas fa-search"></i>
+                            Browse Inventory
+                        </button>
+                        <button class="action-btn" id="export-data-btn">
+                            <i class="fas fa-download"></i>
+                            Export Data
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Mission Statement -->
+                <div class="welcome-card mission-card">
+                    <h2><i class="fas fa-heart"></i> Honoring the Past, Organizing the Future.</h2>
+                    <p>At MyEstateAlly, we believe that every object tells a story. Whether you are helping a loved one downsize or navigating the complex task of settling an estate, the "stuff" can feel like a burden.</p>
+                    <p>Our Mission is to turn that burden into a manageable path forward. By combining compassionate design with AI-powered efficiency, we help you catalog, value, and find the right home for every item—preserving legacies while giving you the space to breathe.</p>
                 </div>
 
                 <!-- Hero Upload Section -->
@@ -258,29 +287,6 @@
                     </div>
                 </div>
 
-                <!-- Quick Actions -->
-                <div class="quick-actions">
-                    <h3>Quick Actions</h3>
-                    <div class="actions-grid">
-                        <button class="action-btn" id="add-item-btn">
-                            <i class="fas fa-plus"></i>
-                            Add New Item
-                        </button>
-                        <button class="action-btn" id="ai-pricing-btn">
-                            <i class="fas fa-robot"></i>
-                            AI Price Lookup
-                        </button>
-                        <button class="action-btn" id="browse-inventory-btn">
-                            <i class="fas fa-search"></i>
-                            Browse Inventory
-                        </button>
-                        <button class="action-btn" id="export-data-btn">
-                            <i class="fas fa-download"></i>
-                            Export Data
-                        </button>
-                    </div>
-                </div>
-
                 <!-- Recent Activity -->
                 <div class="recent-activity">
                     <h3>Recent Activity</h3>
@@ -357,8 +363,10 @@
 
                         <select id="for-sale-filter" onchange="app.filterInventory()">
                             <option value="">All Items</option>
-                            <option value="true">For Sale Only</option>
-                            <option value="false">Not For Sale</option>
+                            <option value="sell">For Sale</option>
+                            <option value="family">Assigned to Family</option>
+                            <option value="charity">Assigned to Charity</option>
+                            <option value="keep">Keeping</option>
                         </select>
 
                         <div class="value-range-filter">
@@ -411,13 +419,15 @@
                                     <button class="btn small primary" onclick="app.applyBulkCategory()">Apply</button>
                                 </div>
                                 <div class="bulk-edit-section">
-                                    <label>Mark For Sale:</label>
-                                    <select id="bulk-for-sale-select">
+                                    <label>Set Destination:</label>
+                                    <select id="bulk-destination-select">
                                         <option value="">Select...</option>
-                                        <option value="true">Yes</option>
-                                        <option value="false">No</option>
+                                        <option value="keep">Keep</option>
+                                        <option value="sell">Sell</option>
+                                        <option value="family">Assign to Family / Heir</option>
+                                        <option value="charity">Assign to Charity</option>
                                     </select>
-                                    <button class="btn small primary" onclick="app.applyBulkForSale()">Apply</button>
+                                    <button class="btn small primary" onclick="app.applyBulkDestination()">Apply</button>
                                 </div>
                                 <div class="bulk-edit-section">
                                     <label>Assign To:</label>
@@ -550,6 +560,9 @@
                                 <span class="recommended-value" id="recommended-price">$0.00</span>
                                 <span class="confidence-score" id="confidence-score">82% confidence</span>
                             </div>
+                            <button id="apply-price-btn" class="apply-price-btn" onclick="app.applyPricingToItem()" style="display:none;">
+                                <i class="fas fa-check-circle"></i> Use This Price
+                            </button>
                         </div>
                     </div>
                     
@@ -1180,7 +1193,34 @@
                 <form id="add-item-form" onsubmit="window.app.handleAddItem(event)">
                     <div class="form-group">
                         <label for="item-name">Item Name *</label>
-                        <input type="text" id="item-name" placeholder="e.g., Antique Oak Table" required>
+                        <input type="text" id="item-name" placeholder="e.g., Antique Oak Table (or add photos below)">
+                    </div>
+                    <div class="ai-lookup-row">
+                        <button type="button" id="ai-lookup-btn" class="btn ai-lookup-btn" onclick="window.app.aiLookupItem()">
+                            <i class="fas fa-magic"></i> AI Lookup
+                        </button>
+                        <span class="ai-lookup-hint">Auto-fill category, description &amp; value</span>
+                    </div>
+                    <!-- Photos Section -->
+                    <div class="form-group">
+                        <label><i class="fas fa-camera"></i> Photos <span class="field-hint">Up to 4 — AI uses photos to identify and value the item</span></label>
+                        <div id="new-item-photos-grid" class="item-photos-grid">
+                            <!-- Thumbnails rendered by JS -->
+                        </div>
+                        <div id="add-photo-options" class="add-photo-options">
+                            <button type="button" class="add-photo-btn" id="add-item-photo-btn"
+                                    onclick="document.getElementById('new-item-photo-input').click()">
+                                <i class="fas fa-folder-open"></i> From Device
+                            </button>
+                            <button type="button" class="add-photo-btn add-photo-mobile-btn" id="add-mobile-photo-btn"
+                                    onclick="window.app.openMobileCameraForItem()">
+                                <i class="fas fa-mobile-alt"></i> From Mobile
+                            </button>
+                        </div>
+                        <div id="mobile-photo-qr-panel" style="display:none" class="mobile-photo-qr-panel"></div>
+                        <input type="file" id="new-item-photo-input" accept="image/*" multiple
+                               style="display:none"
+                               onchange="window.app.handleNewItemPhotoSelect(event)">
                     </div>
                     <div class="form-group">
                         <label for="item-category">Category *</label>
@@ -1203,14 +1243,25 @@
                         <textarea id="item-description" rows="3" placeholder="Describe the item..."></textarea>
                     </div>
                     <div class="form-group">
+                        <label for="item-family-history"><i class="fas fa-heart"></i> Family History <span class="field-hint">Who it belonged to, memories, significance</span></label>
+                        <textarea id="item-family-history" rows="4" placeholder="e.g., This clock was my grandmother's. She brought it from Ireland in 1952 and it sat on the mantle every Christmas..."></textarea>
+                    </div>
+                    <div class="form-group">
                         <label for="item-value">Estimated Value ($)</label>
                         <input type="number" id="item-value" min="0" step="0.01" placeholder="0.00">
                     </div>
                     <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="item-for-sale">
-                            For Sale
-                        </label>
+                        <label for="item-destination">Destination</label>
+                        <select id="item-destination" onchange="app.onAddItemDestinationChange()">
+                            <option value="keep">Keep</option>
+                            <option value="sell">Sell</option>
+                            <option value="family">Assign to Family / Heir</option>
+                            <option value="charity">Assign to Charity</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="item-destination-detail-group" style="display: none;">
+                        <label for="item-destination-detail" id="item-destination-detail-label">Recipient Name</label>
+                        <input type="text" id="item-destination-detail" maxlength="200" placeholder="Recipient's name">
                     </div>
                     <div class="modal-actions">
                         <button type="button" class="btn secondary" onclick="closeModal('add-item-modal')">Cancel</button>
@@ -1334,6 +1385,35 @@
                     </div>
                 </div>
                 
+                <!-- Step 2C: Forgot Password -->
+                <div id="auth-step-forgot" class="auth-step">
+                    <div class="auth-step-content">
+                        <button class="back-btn" onclick="authGoBack()">
+                            <i class="fas fa-arrow-left"></i> Back
+                        </button>
+                        <div class="auth-icon">
+                            <i class="fas fa-envelope fa-3x"></i>
+                        </div>
+                        <h4>Reset Password</h4>
+                        <p class="auth-subtitle">Enter your email and we'll send you a reset link</p>
+
+                        <form id="forgot-password-form" onsubmit="submitForgotPassword(event)">
+                            <div class="form-group">
+                                <label for="forgot-email">Email Address</label>
+                                <input type="email" id="forgot-email" required placeholder="Enter your email" autofocus>
+                            </div>
+                            <button type="submit" class="btn primary full-width" id="forgot-submit-btn">
+                                <i class="fas fa-paper-plane"></i> Send Reset Link
+                            </button>
+                        </form>
+
+                        <div id="forgot-success-msg" style="display: none;" class="auth-success-msg">
+                            <i class="fas fa-check-circle"></i>
+                            <p>Check your email! If that address is registered, you'll receive a reset link within a few minutes.</p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Step 2B: Sign Up (New User) -->
                 <div id="auth-step-signup" class="auth-step">
                     <div class="auth-step-content">
@@ -1457,6 +1537,42 @@
                             </button>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reset Password Modal (shown when ?token= in URL) -->
+    <div id="reset-password-modal" class="modal" style="display: none;">
+        <div class="modal-content auth-modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-lock"></i> Set New Password</h3>
+            </div>
+            <div class="modal-body">
+                <div id="reset-success-view" style="display: none; text-align: center; padding: 20px;">
+                    <i class="fas fa-check-circle" style="font-size: 3rem; color: #22c55e; margin-bottom: 16px;"></i>
+                    <h4>Password Reset!</h4>
+                    <p style="color: var(--text-secondary); margin-bottom: 20px;">Your password has been updated. You can now sign in with your new password.</p>
+                    <button class="btn primary" onclick="closeModal('reset-password-modal'); openModal('auth-modal');">
+                        <i class="fas fa-sign-in-alt"></i> Sign In
+                    </button>
+                </div>
+                <div id="reset-form-view">
+                    <p style="color: var(--text-secondary); margin-bottom: 20px;">Enter your new password below. It must be at least 12 characters and include uppercase, lowercase, and a number.</p>
+                    <form id="reset-password-form" onsubmit="submitResetPassword(event)">
+                        <div class="form-group">
+                            <label for="reset-new-password">New Password</label>
+                            <input type="password" id="reset-new-password" required placeholder="New password (12+ characters)" minlength="12">
+                        </div>
+                        <div class="form-group">
+                            <label for="reset-confirm-password">Confirm Password</label>
+                            <input type="password" id="reset-confirm-password" required placeholder="Confirm new password">
+                        </div>
+                        <div id="reset-error-msg" style="display: none; color: #ef4444; margin-bottom: 12px; font-size: 0.9rem;"></div>
+                        <button type="submit" class="btn primary full-width" id="reset-submit-btn">
+                            <i class="fas fa-check"></i> Reset Password
+                        </button>
+                    </form>
                 </div>
             </div>
         </div>
@@ -1980,7 +2096,7 @@
                         <div class="mfa-secret-container">
                             <label>Manual Entry Key:</label>
                             <code id="mfa-secret-display">-</code>
-                            <button class="btn-icon" onclick="app.copyMFASecret()" title="Copy secret"><i class="fas fa-copy"></i></button>
+                            <button class="btn-icon-inline" onclick="app.copyMFASecret()" title="Copy secret"><i class="fas fa-copy"></i></button>
                         </div>
                     </div>
                     <form id="mfa-verify-form" onsubmit="app.verifyMFASetup(event)">

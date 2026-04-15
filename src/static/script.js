@@ -28,6 +28,8 @@ class MyEstateAllyApp {
             allow_wanted_tagging: true
         };
         this.currentShareLink = null;
+        this.newItemPhotos = [];  // base64 data URLs for photos being added
+        this.mobilePhotoInterval = null;
 
         this.init();
     }
@@ -151,16 +153,21 @@ class MyEstateAllyApp {
                 return true; // User is authenticated
             }
 
-            // No valid session, show auth modal
+            // No valid session — only auto-open the auth modal if NOT on the landing page.
+            // On the landing page, visitors should browse freely and open the modal via CTA buttons.
             this.updateAuthUI(false);
-            this.openModal('auth-modal');
+            if (!document.querySelector('.hero')) {
+                this.openModal('auth-modal');
+            }
             return false; // User is not authenticated
 
         } catch (error) {
             console.error('Auth check failed:', error);
             // Fallback to showing auth UI
             this.updateAuthUI(false);
-            this.openModal('auth-modal');
+            if (!document.querySelector('.hero')) {
+                this.openModal('auth-modal');
+            }
             return false; // Auth check failed, treat as not authenticated
         }
     }
@@ -704,9 +711,9 @@ class MyEstateAllyApp {
                     <h4>${item.name || 'Unnamed Item'}</h4>
                     <p class="item-category">${item.category || 'Uncategorized'}</p>
                     <p class="item-description">${item.description || 'No description'}</p>
-                    <p class="item-value">$${item.estimatedValue || 0}</p>
-                    ${item.forSale ? '<span class="for-sale-badge">For Sale</span>' : ''}
-                    ${item.assignedTo ? `<span class="assigned-badge">Assigned to ${item.assignedTo}</span>` : ''}
+                    <p class="item-value item-value-editable" onclick="app.quickEditValue('${item.id}', ${item.estimatedValue || 0})" title="Click to edit value">$${(item.estimatedValue || 0).toLocaleString()} <i class="fas fa-pencil-alt item-value-edit-icon"></i></p>
+                    ${this.getDestinationBadgeHTML(item)}
+                    ${item.familyHistory ? '<span class="family-history-indicator"><i class="fas fa-heart"></i> Story</span>' : ''}
                     <div class="item-actions">
                         <button class="edit-btn" onclick="app.editItem('${item.id}')">
                             <i class="fas fa-edit"></i> Edit
@@ -734,6 +741,75 @@ class MyEstateAllyApp {
     }
 
     /**
+     * Generate destination badge HTML for an item card.
+     * Falls back to legacy forSale / assignedTo fields for old items.
+     */
+    getDestinationBadgeHTML(item) {
+        const dest = item.destination;
+        if (dest === 'sell') return '<span class="for-sale-badge">For Sale</span>';
+        if (dest === 'family') {
+            const d = item.destinationDetail ? ` \u2014 ${item.destinationDetail}` : '';
+            return `<span class="family-badge">Family/Heir${d}</span>`;
+        }
+        if (dest === 'charity') {
+            const d = item.destinationDetail ? ` \u2014 ${item.destinationDetail}` : '';
+            return `<span class="charity-badge">Charity${d}</span>`;
+        }
+        // Backward compat for legacy items without destination field
+        if (!dest && item.forSale) return '<span class="for-sale-badge">For Sale</span>';
+        if (!dest && item.assignedTo) return `<span class="assigned-badge">Assigned to ${item.assignedTo}</span>`;
+        return ''; // keep or unrecognized
+    }
+
+    /**
+     * Show/hide and relabel the destinationDetail field in the edit modal.
+     */
+    onEditDestinationChange() {
+        const sel = document.getElementById('editDestination');
+        const group = document.getElementById('editDestinationDetailGroup');
+        const label = document.getElementById('editDestinationDetailLabel');
+        const input = document.getElementById('editDestinationDetail');
+        if (!sel || !group) return;
+        const val = sel.value;
+        if (val === 'family') {
+            group.style.display = 'block';
+            label.textContent = 'Name of Recipient:';
+            input.placeholder = "Recipient's name";
+        } else if (val === 'charity') {
+            group.style.display = 'block';
+            label.textContent = 'Organization Name:';
+            input.placeholder = 'Charity or organization name';
+        } else {
+            group.style.display = 'none';
+            input.value = '';
+        }
+    }
+
+    /**
+     * Show/hide and relabel the destinationDetail field in the Add Item modal.
+     */
+    onAddItemDestinationChange() {
+        const sel = document.getElementById('item-destination');
+        const group = document.getElementById('item-destination-detail-group');
+        const label = document.getElementById('item-destination-detail-label');
+        const input = document.getElementById('item-destination-detail');
+        if (!sel || !group) return;
+        const val = sel.value;
+        if (val === 'family') {
+            group.style.display = 'block';
+            label.textContent = 'Name of Recipient';
+            input.placeholder = "Recipient's name";
+        } else if (val === 'charity') {
+            group.style.display = 'block';
+            label.textContent = 'Organization Name';
+            input.placeholder = 'Charity or organization name';
+        } else {
+            group.style.display = 'none';
+            input.value = '';
+        }
+    }
+
+    /**
      * Edit an inventory item
      */
     editItem(itemId) {
@@ -742,6 +818,13 @@ class MyEstateAllyApp {
             this.showMessage('Item not found', 'error');
             return;
         }
+
+        // Derive destination from new field or legacy fields (backward compat)
+        const itemDest = item.destination || (item.forSale ? 'sell' : (item.assignedTo ? 'family' : 'keep'));
+        const itemDestDetail = item.destinationDetail || item.assignedTo || '';
+        const showDetail = itemDest === 'family' || itemDest === 'charity';
+        const detailLabel = itemDest === 'charity' ? 'Organization Name:' : 'Name of Recipient:';
+        const detailPlaceholder = itemDest === 'charity' ? 'Charity or organization name' : "Recipient's name";
 
         // Create edit form
         const editForm = `
@@ -769,18 +852,25 @@ class MyEstateAllyApp {
                             <textarea id="editDescription" rows="3">${item.description || ''}</textarea>
                         </div>
                         <div class="form-group">
+                            <label for="editFamilyHistory"><i class="fas fa-heart"></i> Family History <span class="field-hint">Who it belonged to, memories, significance</span></label>
+                            <textarea id="editFamilyHistory" rows="5" placeholder="Share the memory or history behind this item...">${item.familyHistory || ''}</textarea>
+                        </div>
+                        <div class="form-group">
                             <label for="editValue">Estimated Value ($):</label>
                             <input type="number" id="editValue" value="${item.estimatedValue || 0}" min="0" step="0.01">
                         </div>
                         <div class="form-group">
-                            <label for="editAssignedTo">Assigned To:</label>
-                            <input type="text" id="editAssignedTo" value="${item.assignedTo || ''}" placeholder="Leave empty if unassigned">
+                            <label for="editDestination">Destination:</label>
+                            <select id="editDestination">
+                                <option value="keep" ${itemDest === 'keep' ? 'selected' : ''}>Keep</option>
+                                <option value="sell" ${itemDest === 'sell' ? 'selected' : ''}>Sell</option>
+                                <option value="family" ${itemDest === 'family' ? 'selected' : ''}>Assign to Family / Heir</option>
+                                <option value="charity" ${itemDest === 'charity' ? 'selected' : ''}>Assign to Charity</option>
+                            </select>
                         </div>
-                        <div class="form-group">
-                            <label>
-                                <input type="checkbox" id="editForSale" ${item.forSale ? 'checked' : ''}>
-                                For Sale
-                            </label>
+                        <div class="form-group" id="editDestinationDetailGroup" style="display: ${showDetail ? 'block' : 'none'};">
+                            <label for="editDestinationDetail" id="editDestinationDetailLabel">${detailLabel}</label>
+                            <input type="text" id="editDestinationDetail" value="${itemDestDetail}" maxlength="200" placeholder="${detailPlaceholder}">
                         </div>
                         <div class="form-actions">
                             <button type="button" onclick="app.closeEditModal()">Cancel</button>
@@ -793,6 +883,12 @@ class MyEstateAllyApp {
 
         // Add modal to page
         document.body.insertAdjacentHTML('beforeend', editForm);
+
+        // Wire destination dropdown change handler
+        const editDestSelect = document.getElementById('editDestination');
+        if (editDestSelect) {
+            editDestSelect.addEventListener('change', () => this.onEditDestinationChange());
+        }
 
         // Handle form submission
         document.getElementById('editForm').addEventListener('submit', (e) => {
@@ -809,9 +905,10 @@ class MyEstateAllyApp {
             name: document.getElementById('editName').value,
             category: document.getElementById('editCategory').value,
             description: document.getElementById('editDescription').value,
+            familyHistory: document.getElementById('editFamilyHistory')?.value?.trim() || '',
             estimatedValue: parseFloat(document.getElementById('editValue').value) || 0,
-            assignedTo: document.getElementById('editAssignedTo').value,
-            forSale: document.getElementById('editForSale').checked
+            destination: document.getElementById('editDestination').value,
+            destinationDetail: document.getElementById('editDestinationDetail')?.value?.trim() || ''
         };
 
         try {
@@ -906,10 +1003,15 @@ class MyEstateAllyApp {
         const category = document.getElementById('item-category').value;
         const description = document.getElementById('item-description').value.trim();
         const estimatedValue = parseFloat(document.getElementById('item-value').value) || 0;
-        const forSale = document.getElementById('item-for-sale').checked;
+        const destination = document.getElementById('item-destination')?.value || 'keep';
+        const destinationDetail = document.getElementById('item-destination-detail')?.value?.trim() || '';
 
-        if (!name || !category) {
-            this.showMessage('Please fill in item name and category', 'error');
+        if (!name && this.newItemPhotos.length === 0) {
+            this.showMessage('Please enter an item name or add at least one photo', 'error');
+            return;
+        }
+        if (!category) {
+            this.showMessage('Please select a category', 'error');
             return;
         }
 
@@ -923,9 +1025,12 @@ class MyEstateAllyApp {
                     name,
                     category,
                     description,
+                    familyHistory: document.getElementById('item-family-history')?.value?.trim() || '',
                     estimatedValue,
-                    forSale,
-                    photo: '/static/placeholder-image.png'  // Placeholder for manual entries
+                    destination,
+                    destinationDetail,
+                    photos: this.newItemPhotos,
+                    photo: this.newItemPhotos[0] || ''
                 })
             });
 
@@ -933,8 +1038,11 @@ class MyEstateAllyApp {
 
             if (result.success) {
                 this.showMessage('Item added successfully!', 'success');
+                this.newItemPhotos = [];
+                this.renderNewItemPhotoThumbnails();
                 this.closeModal('add-item-modal');
                 document.getElementById('add-item-form').reset();
+                this.onAddItemDestinationChange(); // Re-hide detail group after reset
                 this.loadInventory(); // Refresh inventory
             } else {
                 this.showMessage(`Error: ${result.error}`, 'error');
@@ -943,6 +1051,402 @@ class MyEstateAllyApp {
             console.error('Error adding item:', error);
             this.showMessage('Failed to add item. Please try again.', 'error');
         }
+    }
+
+    /**
+     * AI Lookup — auto-fill Add Item form fields from item name
+     */
+    async aiLookupItem() {
+        const nameInput = document.getElementById('item-name');
+        const btn = document.getElementById('ai-lookup-btn');
+        const name = nameInput ? nameInput.value.trim() : '';
+
+        if (!name && this.newItemPhotos.length === 0) {
+            this.showMessage('Please enter an item name or add photos first', 'error');
+            return;
+        }
+
+        if (btn) {
+            btn.disabled = true;
+            const lookupLabel = this.newItemPhotos.length > 0 ? 'Analyzing photos...' : 'Looking up...';
+            btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${lookupLabel}`;
+        }
+
+        try {
+            const descriptionEl = document.getElementById('item-description');
+            const currentDescription = descriptionEl ? descriptionEl.value.trim() : '';
+
+            // Log photo sizes to help diagnose upload issues
+            if (this.newItemPhotos.length > 0) {
+                this.newItemPhotos.forEach((p, i) => {
+                    console.log(`AI Lookup photo[${i}]: ${Math.round(p.length / 1024)}KB`);
+                });
+            }
+
+            const response = await fetch('/api/ai/lookup-item', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name,
+                    description: currentDescription,
+                    photos: this.newItemPhotos
+                })
+            });
+
+            if (!response.ok) {
+                let errMsg = 'AI lookup failed. Please try again.';
+                try {
+                    const errData = await response.json();
+                    if (errData && errData.error) errMsg = errData.error;
+                } catch (_) {}
+                throw new Error(errMsg);
+            }
+
+            const data = await response.json();
+
+            if (data.success) {
+                const lookup = data.lookup;
+                const filled = [];
+
+                // Fill item name if AI identified it from photos (when name field was empty)
+                const nameEl = document.getElementById('item-name');
+                if (nameEl && !nameEl.value.trim() && lookup.item_name) {
+                    nameEl.value = lookup.item_name;
+                    filled.push('item name');
+                }
+
+                // Fill category only if unselected
+                const categoryEl = document.getElementById('item-category');
+                if (categoryEl && !categoryEl.value && lookup.category) {
+                    categoryEl.value = lookup.category;
+                    filled.push('category');
+                }
+
+                // Fill description only if empty
+                if (descriptionEl && !currentDescription && lookup.description) {
+                    descriptionEl.value = lookup.description;
+                    filled.push('description');
+                }
+
+                // Fill value only if 0 or blank
+                const valueEl = document.getElementById('item-value');
+                const currentValue = valueEl ? parseFloat(valueEl.value) || 0 : 0;
+                if (valueEl && currentValue === 0 && lookup.estimated_value) {
+                    valueEl.value = lookup.estimated_value;
+                    filled.push('estimated value');
+                }
+
+                if (filled.length > 0) {
+                    this.showMessage(`AI filled: ${filled.join(', ')}`, 'success');
+                } else {
+                    this.showMessage('AI lookup complete — all fields already filled', 'info');
+                }
+            } else {
+                this.showMessage(data.error || 'AI lookup failed', 'error');
+            }
+        } catch (error) {
+            console.error('Error with AI lookup:', error);
+            this.showMessage(error.message || 'Failed to get AI lookup. Please try again.', 'error');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-magic"></i> AI Lookup';
+            }
+        }
+    }
+
+    /**
+     * Compress a photo for item storage.
+     * Max 800px, 65% JPEG quality → ~50-80KB per photo.
+     * Returns a base64 data URL string.
+     */
+    async compressItemPhoto(file) {
+        // Use createImageBitmap which automatically applies EXIF orientation
+        // (fixes 90°-rotated phone photos). Falls back to FileReader for HEIC/unsupported formats.
+        try {
+            let bitmap;
+            try {
+                // imageOrientation:'from-image' respects EXIF — supported in Chrome 81+, Safari 17+, Firefox 93+
+                bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+            } catch (e) {
+                // Option not supported — try without it (no EXIF correction on older browsers)
+                bitmap = await createImageBitmap(file);
+            }
+
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            let { width, height } = bitmap;
+            const maxDim = 800;
+            if (width > maxDim || height > maxDim) {
+                const ratio = Math.min(maxDim / width, maxDim / height);
+                width = Math.round(width * ratio);
+                height = Math.round(height * ratio);
+            }
+            canvas.width = width;
+            canvas.height = height;
+            ctx.drawImage(bitmap, 0, 0, width, height);
+            if (bitmap.close) bitmap.close();
+            return canvas.toDataURL('image/jpeg', 0.65);
+
+        } catch (err) {
+            // createImageBitmap not supported or format not renderable (e.g., HEIC on older iOS).
+            // Fall back to loading via <img> + canvas so we still get compression & resizing.
+            return new Promise(resolve => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        try {
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+                            let { width, height } = img;
+                            const maxDim = 800;
+                            if (width > maxDim || height > maxDim) {
+                                const ratio = Math.min(maxDim / width, maxDim / height);
+                                width = Math.round(width * ratio);
+                                height = Math.round(height * ratio);
+                            }
+                            canvas.width = width;
+                            canvas.height = height;
+                            ctx.drawImage(img, 0, 0, width, height);
+                            resolve(canvas.toDataURL('image/jpeg', 0.65));
+                        } catch (canvasErr) {
+                            // Canvas also failed — last resort: use raw data URL (may be too large for AI)
+                            console.warn('Canvas fallback failed, using raw data URL:', canvasErr);
+                            resolve(e.target.result);
+                        }
+                    };
+                    img.onerror = () => resolve(null);
+                    img.src = e.target.result;
+                };
+                reader.onerror = () => resolve(null);
+                reader.readAsDataURL(file);
+            });
+        }
+    }
+
+    /**
+     * Called by file input onchange — loops files and delegates to addNewItemPhoto().
+     */
+    async handleNewItemPhotoSelect(event) {
+        const files = Array.from(event.target.files || []);
+        event.target.value = '';  // reset so same file can be re-selected
+
+        for (const file of files) {
+            if (this.newItemPhotos.length >= 4) {
+                this.showMessage('Maximum 4 photos allowed', 'error');
+                break;
+            }
+            await this.addNewItemPhoto(file);
+        }
+    }
+
+    /**
+     * Validate, HEIC-convert if needed, compress, and push a single photo.
+     */
+    async addNewItemPhoto(file) {
+        const isImage = file.type.startsWith('image/') || !file.type;
+        const validExt = /\.(jpg|jpeg|png|heic|heif|webp|gif|bmp|avif)$/i.test(file.name);
+        if (!isImage && !validExt) {
+            this.showMessage('Please select a valid image file', 'error');
+            return;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+            this.showMessage('Image is too large (max 10MB)', 'error');
+            return;
+        }
+
+        try {
+            let processedFile = file;
+            if (file.type === 'image/heic' || file.type === 'image/heif' ||
+                file.name.toLowerCase().endsWith('.heic')) {
+                processedFile = await this.convertHEICToJPEG(file);
+            }
+            const dataUrl = await this.compressItemPhoto(processedFile);
+            if (!dataUrl) {
+                this.showMessage("Could not read photo. If it's stored in iCloud, open the Photos app and wait for it to download, then try again.", 'error');
+                return;
+            }
+            this.newItemPhotos.push(dataUrl);
+            this.renderNewItemPhotoThumbnails();
+        } catch (err) {
+            console.error('Error processing photo:', err);
+            this.showMessage('Failed to process photo. Please try another.', 'error');
+        }
+    }
+
+    /**
+     * Rebuild the thumbnail grid from this.newItemPhotos.
+     */
+    renderNewItemPhotoThumbnails() {
+        const grid = document.getElementById('new-item-photos-grid');
+        const addBtn = document.getElementById('add-item-photo-btn');
+
+        if (!grid) return;
+
+        grid.innerHTML = this.newItemPhotos.map((dataUrl, idx) => `
+            <div class="photo-thumb-wrapper">
+                <img class="photo-thumb" src="${dataUrl}" alt="Item photo ${idx + 1}">
+                <button type="button" class="photo-thumb-remove"
+                        onclick="window.app.removeNewItemPhoto(${idx})"
+                        title="Remove photo">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `).join('');
+
+        if (addBtn) {
+            addBtn.disabled = this.newItemPhotos.length >= 4;
+        }
+        const mobileBtn = document.getElementById('add-mobile-photo-btn');
+        if (mobileBtn) mobileBtn.disabled = this.newItemPhotos.length >= 4;
+    }
+
+    /**
+     * Remove one photo by index, re-render thumbnails.
+     */
+    removeNewItemPhoto(index) {
+        this.newItemPhotos.splice(index, 1);
+        this.renderNewItemPhotoThumbnails();
+    }
+
+    /**
+     * Show inline QR panel for mobile photo capture in the Add Item modal.
+     */
+    async openMobileCameraForItem() {
+        if (this.newItemPhotos.length >= 4) {
+            this.showMessage('Maximum 4 photos allowed', 'error');
+            return;
+        }
+        const panel = document.getElementById('mobile-photo-qr-panel');
+        const options = document.getElementById('add-photo-options');
+        if (!panel || !options) return;
+
+        panel.innerHTML = `<div class="mobile-qr-loading"><i class="fas fa-spinner fa-spin"></i><p>Generating QR code...</p></div>`;
+        options.style.display = 'none';
+        panel.style.display = 'block';
+
+        try {
+            const response = await fetch('/api/qr/photo-session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const result = await response.json();
+            if (!result.success) throw new Error(result.error || 'Failed');
+
+            panel.innerHTML = `
+                <div class="mobile-qr-content">
+                    <img src="${result.qr_code}" alt="QR Code" class="mobile-qr-image">
+                    <p class="mobile-qr-label"><i class="fas fa-mobile-alt"></i> Scan with your phone's camera</p>
+                    <p class="mobile-qr-hint">Take or select a photo — it will appear here automatically.</p>
+                    <div class="mobile-qr-waiting">
+                        <i class="fas fa-circle-notch fa-spin"></i>
+                        <span>Waiting for photo...</span>
+                    </div>
+                    <button type="button" class="add-photo-btn mobile-qr-cancel-btn"
+                            onclick="window.app.cancelMobilePhotoCapture()">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>`;
+            this.startMobilePhotoPolling(result.session_id);
+        } catch (err) {
+            console.error('Mobile photo QR error:', err);
+            panel.innerHTML = `
+                <div class="mobile-qr-error">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Failed to generate QR code.</p>
+                    <button type="button" class="add-photo-btn"
+                            onclick="window.app.openMobileCameraForItem()">
+                        <i class="fas fa-redo"></i> Retry
+                    </button>
+                    <button type="button" class="add-photo-btn"
+                            onclick="window.app.cancelMobilePhotoCapture()">Cancel</button>
+                </div>`;
+        }
+    }
+
+    /**
+     * Poll every 2.5s until a photo arrives from the mobile device (max 5 min).
+     */
+    startMobilePhotoPolling(sessionId) {
+        if (this.mobilePhotoInterval) clearInterval(this.mobilePhotoInterval);
+        const startTime = Date.now();
+        this.mobilePhotoInterval = setInterval(async () => {
+            if (Date.now() - startTime > 5 * 60 * 1000) {
+                this.cancelMobilePhotoCapture();
+                this.showMessage('Mobile photo capture timed out. Please try again.', 'warning');
+                return;
+            }
+            try {
+                const response = await fetch(`/api/qr/photo-poll/${sessionId}`);
+                if (!response.ok) return;
+                const data = await response.json();
+                if (data.ready && data.photo) {
+                    clearInterval(this.mobilePhotoInterval);
+                    this.mobilePhotoInterval = null;
+                    await this.addNewItemPhotoFromDataUrl(data.photo);
+                    this.cancelMobilePhotoCapture();
+                    this.showMessage('Photo added from mobile!', 'success');
+                }
+            } catch (err) {
+                console.warn('Mobile photo poll error (will retry):', err);
+            }
+        }, 2500);
+    }
+
+    /**
+     * Stop polling and restore the photo buttons.
+     */
+    cancelMobilePhotoCapture() {
+        if (this.mobilePhotoInterval) {
+            clearInterval(this.mobilePhotoInterval);
+            this.mobilePhotoInterval = null;
+        }
+        const panel = document.getElementById('mobile-photo-qr-panel');
+        const options = document.getElementById('add-photo-options');
+        if (panel) panel.style.display = 'none';
+        if (options) options.style.display = 'flex';
+    }
+
+    /**
+     * Add a photo that arrived as a data URL (from mobile QR capture).
+     * Re-compresses to 800px / 65% JPEG so it matches the direct-file-pick pipeline
+     * and stays well under the 200KB AI-lookup size limit.
+     */
+    async addNewItemPhotoFromDataUrl(dataUrl) {
+        if (this.newItemPhotos.length >= 4) {
+            this.showMessage('Maximum 4 photos allowed', 'error');
+            return;
+        }
+        try {
+            const compressed = await new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    let { width, height } = img;
+                    const maxDim = 800;
+                    if (width > maxDim || height > maxDim) {
+                        const ratio = Math.min(maxDim / width, maxDim / height);
+                        width = Math.round(width * ratio);
+                        height = Math.round(height * ratio);
+                    }
+                    canvas.width = width;
+                    canvas.height = height;
+                    ctx.drawImage(img, 0, 0, width, height);
+                    resolve(canvas.toDataURL('image/jpeg', 0.65));
+                };
+                img.onerror = () => reject(new Error('Image load failed'));
+                img.src = dataUrl;
+            });
+            this.newItemPhotos.push(compressed);
+        } catch (err) {
+            // Fall back to original data URL if canvas compression fails
+            console.warn('QR photo compression failed, using original:', err);
+            this.newItemPhotos.push(dataUrl);
+        }
+        this.renderNewItemPhotoThumbnails();
     }
 
     /**
@@ -1210,7 +1714,13 @@ class MyEstateAllyApp {
             this.showMessage('Please select an item from inventory or enter an item name.', 'error');
             return;
         }
-        
+
+        // Track which item this lookup is for (so we can apply the price later)
+        this.pricingCurrentItemId = itemSelect.value || null;
+        this.pricingCurrentPrice = null;
+        const applyBtn = document.getElementById('apply-price-btn');
+        if (applyBtn) applyBtn.style.display = 'none';
+
         // Show loading state
         this.showPricingLoading();
         
@@ -1291,7 +1801,14 @@ class MyEstateAllyApp {
         // Update recommended price
         document.getElementById('recommended-price').textContent = `$${data.ai_analysis.recommended_price.toFixed(2)}`;
         document.getElementById('confidence-score').textContent = `${Math.round(data.ai_analysis.confidence_score * 100)}% confidence`;
-        
+
+        // Store price for apply-to-item button and show it if an inventory item was selected
+        this.pricingCurrentPrice = data.ai_analysis.recommended_price;
+        const applyBtn = document.getElementById('apply-price-btn');
+        if (applyBtn) {
+            applyBtn.style.display = this.pricingCurrentItemId ? 'inline-flex' : 'none';
+        }
+
         // Update market insights
         const insightsList = document.getElementById('market-insights');
         insightsList.innerHTML = data.ai_analysis.market_insights.map(insight => `<li>${insight}</li>`).join('');
@@ -1353,6 +1870,107 @@ class MyEstateAllyApp {
     }
 
     /**
+     * Apply the AI-recommended pricing to the selected inventory item's estimated value
+     */
+    async applyPricingToItem() {
+        if (!this.pricingCurrentItemId || !this.pricingCurrentPrice) {
+            this.showMessage('No item or price available to apply.', 'error');
+            return;
+        }
+
+        const item = this.inventory.find(i => i.id === this.pricingCurrentItemId);
+        const itemName = item ? item.name : 'this item';
+        const priceFormatted = `$${this.pricingCurrentPrice.toFixed(2)}`;
+
+        if (!confirm(`Set estimated value of "${itemName}" to ${priceFormatted}?`)) {
+            return;
+        }
+
+        const applyBtn = document.getElementById('apply-price-btn');
+        if (applyBtn) {
+            applyBtn.disabled = true;
+            applyBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+        }
+
+        try {
+            const response = await fetch(`/api/items/${this.pricingCurrentItemId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ estimatedValue: this.pricingCurrentPrice })
+            });
+
+            if (!response.ok) {
+                let errMsg = 'Failed to update price.';
+                try {
+                    const errData = await response.json();
+                    if (errData && errData.error) errMsg = errData.error;
+                } catch (_) {}
+                throw new Error(errMsg);
+            }
+
+            const result = await response.json();
+            if (result.success) {
+                this.showMessage(`Price updated to ${priceFormatted} for "${itemName}"`, 'success');
+                await this.loadInventory();
+                // Hide button after successful apply
+                if (applyBtn) applyBtn.style.display = 'none';
+            } else {
+                throw new Error(result.error || 'Failed to update price.');
+            }
+        } catch (error) {
+            console.error('Apply pricing error:', error);
+            this.showMessage(error.message || 'Failed to update price. Please try again.', 'error');
+        } finally {
+            if (applyBtn) {
+                applyBtn.disabled = false;
+                applyBtn.innerHTML = '<i class="fas fa-check-circle"></i> Use This Price';
+            }
+        }
+    }
+
+    /**
+     * Quickly update an item's estimated value inline from the inventory card
+     */
+    async quickEditValue(itemId, currentValue) {
+        const newValueStr = prompt(`Enter new estimated value for this item:`, currentValue);
+        if (newValueStr === null) return; // user cancelled
+
+        const newValue = parseFloat(newValueStr.replace(/[^0-9.]/g, ''));
+        if (isNaN(newValue) || newValue < 0) {
+            this.showMessage('Please enter a valid positive number.', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/items/${itemId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ estimatedValue: newValue })
+            });
+
+            if (!response.ok) {
+                let errMsg = 'Failed to update value.';
+                try {
+                    const errData = await response.json();
+                    if (errData && errData.error) errMsg = errData.error;
+                } catch (_) {}
+                throw new Error(errMsg);
+            }
+
+            const result = await response.json();
+            if (result.success) {
+                this.showMessage(`Value updated to $${newValue.toFixed(2)}`, 'success');
+                await this.loadInventory();
+            } else {
+                throw new Error(result.error || 'Failed to update value.');
+            }
+        } catch (error) {
+            console.error('Quick edit value error:', error);
+            this.showMessage(error.message || 'Failed to update value. Please try again.', 'error');
+        }
+    }
+
+    /**
      * Update statistics
      */
     updateStats() {
@@ -1364,8 +1982,13 @@ class MyEstateAllyApp {
 
         const totalItems = this.inventory.length;
         const totalValue = this.inventory.reduce((sum, item) => sum + (item.estimatedValue || 0), 0);
-        const forSaleItems = this.inventory.filter(item => item.forSale).length;
-        const assignedItems = this.inventory.filter(item => item.assignedTo).length;
+        const forSaleItems = this.inventory.filter(item =>
+            item.destination === 'sell' || (!item.destination && item.forSale)
+        ).length;
+        const assignedItems = this.inventory.filter(item =>
+            item.destination === 'family' || item.destination === 'charity' ||
+            (!item.destination && item.assignedTo)
+        ).length;
 
         document.getElementById('total-items').textContent = totalItems;
         document.getElementById('total-value').textContent = `$${totalValue.toLocaleString()}`;
@@ -1487,13 +2110,16 @@ class MyEstateAllyApp {
         document.getElementById('wanted-items-count').textContent = '0';
         
         // Calculate shared items count based on settings
-        const sharedCount = this.sharingSettings.show_for_sale_only 
-            ? this.inventory.filter(item => item.forSale).length 
+        const sharedCount = this.sharingSettings.show_for_sale_only
+            ? this.inventory.filter(item => item.destination === 'sell' || (!item.destination && item.forSale)).length
             : this.inventory.length;
         document.getElementById('shared-items-count').textContent = sharedCount;
-        
+
         // Calculate conflict items and show decision making section if there are assignments
-        const assignedItems = this.inventory.filter(item => item.assignedTo);
+        const assignedItems = this.inventory.filter(item =>
+            item.destination === 'family' || item.destination === 'charity' ||
+            (!item.destination && item.assignedTo)
+        );
         const conflictCount = assignedItems.length; // Simplified for now
         document.getElementById('conflict-items-count').textContent = conflictCount;
         
@@ -1691,6 +2317,13 @@ class MyEstateAllyApp {
     }
 
     /**
+     * Open the authentication modal — used by landing page CTA buttons
+     */
+    openAuthModal() {
+        this.openModal('auth-modal');
+    }
+
+    /**
      * Open modal
      */
     openModal(modalId) {
@@ -1707,8 +2340,11 @@ class MyEstateAllyApp {
                         </div>
                     `;
                 }
+            } else if (modalId === 'add-item-modal') {
+                this.newItemPhotos = [];
+                this.renderNewItemPhotoThumbnails();
             }
-            
+
             modal.style.display = 'flex';
             document.body.style.overflow = 'hidden';
         }
@@ -1722,6 +2358,9 @@ class MyEstateAllyApp {
         if (modal) {
             modal.style.display = 'none';
             document.body.style.overflow = '';
+        }
+        if (modalId === 'add-item-modal') {
+            this.cancelMobilePhotoCapture();
         }
     }
 
@@ -2131,23 +2770,22 @@ class MyEstateAllyApp {
         const userMenu = document.getElementById('user-menu');
         const authButtons = document.getElementById('auth-buttons');
         const estateSelector = document.getElementById('estate-selector');
-        
+
+        // Elements may not exist on the landing page — guard against null
         if (isAuthenticated) {
-            // Show user menu and estate selector, hide auth buttons
-            userMenu.style.display = 'block';
-            estateSelector.style.display = 'flex';
-            authButtons.style.display = 'none';
-            
+            if (userMenu) userMenu.style.display = 'block';
+            if (estateSelector) estateSelector.style.display = 'flex';
+            if (authButtons) authButtons.style.display = 'none';
+
             // Update user name
             const userName = document.getElementById('user-name');
             if (userName && this.currentUser) {
                 userName.textContent = this.currentUser.name;
             }
         } else {
-            // Hide user menu and estate selector, show auth buttons
-            userMenu.style.display = 'none';
-            estateSelector.style.display = 'none';
-            authButtons.style.display = 'flex';
+            if (userMenu) userMenu.style.display = 'none';
+            if (estateSelector) estateSelector.style.display = 'none';
+            if (authButtons) authButtons.style.display = 'flex';
         }
     }
 
@@ -2989,9 +3627,13 @@ class MyEstateAllyApp {
         await this.bulkEdit('category', category);
     }
 
-    async applyBulkForSale() {
-        const forSale = document.getElementById('bulk-for-sale-select')?.value === 'true';
-        await this.bulkEdit('forSale', forSale);
+    async applyBulkDestination() {
+        const destination = document.getElementById('bulk-destination-select')?.value;
+        if (!destination) {
+            this.showMessage('Please select a destination', 'error');
+            return;
+        }
+        await this.bulkEdit('destination', destination);
     }
 
     async applyBulkAssign() {
@@ -3031,10 +3673,14 @@ class MyEstateAllyApp {
             // Category filter
             const matchesCategory = !categoryFilter || item.category === categoryFilter;
 
-            // For sale filter
-            const matchesForSale = !forSaleFilter ||
-                (forSaleFilter === 'true' && item.forSale) ||
-                (forSaleFilter === 'false' && !item.forSale);
+            // Destination filter (with backward compat for legacy forSale/assignedTo)
+            const matchesForSale = !forSaleFilter || (() => {
+                if (item.destination) return item.destination === forSaleFilter;
+                if (forSaleFilter === 'sell') return !!item.forSale;
+                if (forSaleFilter === 'family') return !!item.assignedTo;
+                if (forSaleFilter === 'keep') return !item.forSale && !item.assignedTo;
+                return false;
+            })();
 
             // Value range filter
             const itemValue = parseFloat(item.estimatedValue) || 0;
@@ -3105,9 +3751,9 @@ class MyEstateAllyApp {
                     <h4>${item.name || 'Unnamed Item'}</h4>
                     <p class="item-category">${item.category || 'Uncategorized'}</p>
                     <p class="item-description">${item.description || 'No description'}</p>
-                    <p class="item-value">$${item.estimatedValue || 0}</p>
-                    ${item.forSale ? '<span class="for-sale-badge">For Sale</span>' : ''}
-                    ${item.assignedTo ? `<span class="assigned-badge">Assigned to ${item.assignedTo}</span>` : ''}
+                    <p class="item-value item-value-editable" onclick="app.quickEditValue('${item.id}', ${item.estimatedValue || 0})" title="Click to edit value">$${(item.estimatedValue || 0).toLocaleString()} <i class="fas fa-pencil-alt item-value-edit-icon"></i></p>
+                    ${this.getDestinationBadgeHTML(item)}
+                    ${item.familyHistory ? '<span class="family-history-indicator"><i class="fas fa-heart"></i> Story</span>' : ''}
                     <div class="item-actions">
                         <button class="edit-btn" onclick="app.editItem('${item.id}')">
                             <i class="fas fa-edit"></i> Edit
@@ -3550,7 +4196,97 @@ function resendMfaCode() {
 }
 
 function showForgotPassword() {
-    app.showMessage('Password reset feature coming soon!', 'info');
+    // Pre-fill email from the auth flow if available
+    const emailFromAuth = document.getElementById('auth-email-input');
+    if (emailFromAuth && emailFromAuth.value) {
+        const forgotEmail = document.getElementById('forgot-email');
+        if (forgotEmail) forgotEmail.value = emailFromAuth.value;
+    }
+    showAuthStep('forgot');
+}
+
+async function submitForgotPassword(event) {
+    event.preventDefault();
+    const email = document.getElementById('forgot-email').value.trim();
+    const btn = document.getElementById('forgot-submit-btn');
+    const successMsg = document.getElementById('forgot-success-msg');
+    const form = document.getElementById('forgot-password-form');
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+
+    try {
+        const resp = await fetch('/api/auth/forgot-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+        // Always show success (backend never reveals if email exists)
+        form.style.display = 'none';
+        successMsg.style.display = 'flex';
+    } catch (err) {
+        // Still show success to prevent enumeration
+        form.style.display = 'none';
+        successMsg.style.display = 'flex';
+    }
+}
+
+async function submitResetPassword(event) {
+    event.preventDefault();
+    const newPassword = document.getElementById('reset-new-password').value;
+    const confirmPassword = document.getElementById('reset-confirm-password').value;
+    const errorDiv = document.getElementById('reset-error-msg');
+    const btn = document.getElementById('reset-submit-btn');
+
+    // Client-side validation
+    errorDiv.style.display = 'none';
+    if (newPassword !== confirmPassword) {
+        errorDiv.textContent = 'Passwords do not match.';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    if (newPassword.length < 12) {
+        errorDiv.textContent = 'Password must be at least 12 characters.';
+        errorDiv.style.display = 'block';
+        return;
+    }
+
+    const token = new URLSearchParams(window.location.search).get('token');
+    if (!token) {
+        errorDiv.textContent = 'Reset token missing. Please use the link from your email.';
+        errorDiv.style.display = 'block';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Resetting...';
+
+    try {
+        const resp = await fetch('/api/auth/reset-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token, new_password: newPassword })
+        });
+        const data = await resp.json();
+
+        if (data.success) {
+            // Show success state, hide form
+            document.getElementById('reset-form-view').style.display = 'none';
+            document.getElementById('reset-success-view').style.display = 'block';
+            // Clean token from URL without reload
+            window.history.replaceState({}, document.title, '/');
+        } else {
+            errorDiv.textContent = data.error || 'Reset failed. Please try again.';
+            errorDiv.style.display = 'block';
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check"></i> Reset Password';
+        }
+    } catch (err) {
+        errorDiv.textContent = 'Connection error. Please try again.';
+        errorDiv.style.display = 'block';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check"></i> Reset Password';
+    }
 }
 
 // Legacy function for compatibility
@@ -4125,13 +4861,13 @@ MyEstateAllyApp.prototype.displayDocuments = function() {
                 </div>
                 <div class="document-actions">
                     <button class="btn-icon" onclick="app.previewDocument('${doc.id}')" title="Preview">
-                        <i class="fas fa-eye"></i>
+                        <i class="fas fa-eye"></i><span>Preview</span>
                     </button>
                     <button class="btn-icon" onclick="app.downloadDocument('${doc.id}')" title="Download">
-                        <i class="fas fa-download"></i>
+                        <i class="fas fa-download"></i><span>Download</span>
                     </button>
                     <button class="btn-icon danger" onclick="app.deleteDocument('${doc.id}')" title="Delete">
-                        <i class="fas fa-trash"></i>
+                        <i class="fas fa-trash"></i><span>Delete</span>
                     </button>
                 </div>
             </div>
@@ -4991,6 +5727,34 @@ MyEstateAllyApp.prototype.closeMobileMoreMenu = function() {
 document.addEventListener('DOMContentLoaded', () => {
     window.app = new MyEstateAllyApp();
     console.log('MyEstateAlly app ready!');
+
+    const urlParams = new URLSearchParams(window.location.search);
+
+    // Check for OAuth error in URL (e.g., mismatching_state after Google callback)
+    const oauthError = urlParams.get('error');
+    const oauthMessage = urlParams.get('message');
+    if (oauthError) {
+        // Clean the ugly error params from the URL bar without reloading the page
+        window.history.replaceState({}, document.title, window.location.pathname);
+        // Show a user-friendly message
+        const isStateError = oauthMessage && oauthMessage.toLowerCase().includes('mismatching_state');
+        const msg = isStateError
+            ? 'Sign-in session expired or interrupted. Please try signing in again.'
+            : `Sign-in failed: ${decodeURIComponent(oauthMessage || oauthError)}`;
+        setTimeout(() => {
+            if (window.app) window.app.showMessage(msg, 'error');
+        }, 300); // Small delay to let the app finish initializing
+    }
+
+    // Check for password reset token in URL (/reset-password?token=...)
+    const resetToken = urlParams.get('token');
+    if (resetToken) {
+        // Show the reset password modal automatically
+        const resetModal = document.getElementById('reset-password-modal');
+        if (resetModal) {
+            resetModal.style.display = 'flex';
+        }
+    }
 
     // Global escape key handler for modals
     document.addEventListener('keydown', (e) => {
