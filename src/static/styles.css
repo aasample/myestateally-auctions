@@ -6731,6 +6731,17 @@ h1, h2, h3,
     }
 }
 
+/* Quick Actions — gold hover to match the glamour theme */
+.action-btn:hover {
+    background: var(--gold) !important;
+    border-color: var(--gold-dark) !important;
+    color: var(--navy) !important;
+    box-shadow: 0 6px 20px var(--gold-glow), var(--shadow-lg) !important;
+}
+.action-btn:hover i {
+    color: var(--navy) !important;
+}
+
 /* ================================================================
    END GLAMOUR THEME
    ================================================================ */
