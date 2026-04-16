@@ -6743,5 +6743,144 @@ h1, h2, h3,
 }
 
 /* ================================================================
+   INVENTORY FILTER BAR — uniform 48 px height across all controls
+   ================================================================ */
+
+/* Outer bar: two rows that each wrap neatly */
+.inventory-filters {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-lg);
+    align-items: stretch;
+}
+
+/* Each row is a flex line with a consistent gap */
+.filter-left,
+.filter-right {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+/* ── Shared token for every control height ── */
+.filter-left .btn,
+.filter-right .btn,
+.filter-left select,
+.filter-right select,
+.filter-left .search-box,
+.filter-right .search-box,
+.filter-left .search-box input,
+.filter-left .value-range-filter input {
+    height: 44px;
+    box-sizing: border-box;
+}
+
+/* Buttons: match height, keep their existing look */
+.filter-left .btn,
+.filter-right .btn {
+    padding: 0 var(--spacing-md);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    white-space: nowrap;
+}
+
+/* Selects: uniform padding so text sits centred */
+.filter-left select,
+.filter-right select {
+    padding: 0 var(--spacing-md);
+    font-size: var(--font-size-sm);
+    min-width: 160px;
+    border: 2px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: border-color var(--transition-fast);
+}
+.filter-left select:hover,
+.filter-right select:hover {
+    border-color: var(--gold);
+}
+.filter-left select:focus,
+.filter-right select:focus {
+    outline: none;
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px var(--gold-glow);
+}
+
+/* Search box: stretch input to fill the 44 px tall wrapper */
+.filter-left .search-box {
+    position: relative;
+    max-width: 260px;
+    flex: 1 1 180px;
+}
+.filter-left .search-box input {
+    width: 100%;
+    padding: 0 var(--spacing-sm) 0 40px;
+    border: 2px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    transition: border-color var(--transition-fast);
+}
+.filter-left .search-box input:focus {
+    outline: none;
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px var(--gold-glow);
+}
+
+/* Value-range min/max inputs */
+.value-range-filter {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+.value-range-filter input {
+    width: 90px;
+    padding: 0 var(--spacing-sm);
+    border: 2px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    transition: border-color var(--transition-fast);
+}
+.value-range-filter input:focus {
+    outline: none;
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px var(--gold-glow);
+}
+.value-range-filter span {
+    color: var(--text-light);
+    font-weight: 600;
+}
+
+/* Mobile: stack everything vertically */
+@media (max-width: 768px) {
+    .filter-left,
+    .filter-right {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .filter-left .btn,
+    .filter-right .btn,
+    .filter-left select,
+    .filter-right select,
+    .filter-left .search-box,
+    .filter-left .search-box input,
+    .filter-left .value-range-filter input {
+        width: 100%;
+        max-width: none;
+    }
+    .filter-left .search-box {
+        max-width: none;
+    }
+}
+
+/* ================================================================
    END GLAMOUR THEME
    ================================================================ */
