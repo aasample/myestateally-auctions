@@ -6699,12 +6699,25 @@ h1, h2, h3,
     margin: 4px 0;
 }
 
-/* Header right — shrink-wrap, don't grow */
-.header-actions {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
+/* Header right — ALWAYS visible on desktop.
+   A top-level rule (line ~5580) does display:none !important on .header-actions,
+   which was hiding the user menu on every screen size.
+   We override it here with !important for desktop,
+   and keep it hidden on mobile where the bottom-nav takes over. */
+@media (min-width: 769px) {
+    .header-actions {
+        display: flex !important;
+        flex-shrink: 0;
+        align-items: center;
+        gap: var(--spacing-sm);
+    }
+}
+
+/* Keep header-actions hidden on mobile — bottom nav is used there */
+@media (max-width: 768px) {
+    .header-actions {
+        display: none !important;
+    }
 }
 
 /* Hide the centre estate selector on small screens
