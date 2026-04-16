@@ -6558,15 +6558,18 @@ h1, h2, h3,
 }
 
 /* --- Header three-zone layout: Logo · Estate · User ----------- */
+/* CSS Grid gives three hard columns — each zone always gets its space */
 .header-content {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
     align-items: center;
     gap: var(--spacing-md);
+    width: 100%;
 }
 
-/* Estate selector grows to fill the centre */
+/* Estate selector sits in the centre column, content centred */
 .estate-selector {
-    flex: 1;
+    grid-column: 2;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -6576,6 +6579,13 @@ h1, h2, h3,
     border-right: none;
     margin-right: 0;
     padding-right: 0;
+    min-width: 0; /* allow content to shrink if needed */
+}
+
+/* Header actions always on the right */
+.header-actions {
+    grid-column: 3;
+    justify-self: end;
 }
 
 /* "Managing:" label */
