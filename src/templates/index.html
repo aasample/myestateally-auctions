@@ -32,37 +32,39 @@
     <header class="header">
         <div class="container">
             <div class="header-content">
-                <!-- Mobile Estate Indicator (shown only on mobile) -->
-                <div class="mobile-estate-indicator" id="mobile-estate-indicator" onclick="app.openMobileMoreMenu()" style="display: none;">
-                    <i class="fas fa-bars"></i>
-                    <span class="estate-name-mobile" id="estate-name-mobile">Loading...</span>
-                </div>
 
+                <!-- LEFT: Logo / home button -->
                 <div class="logo" id="home-button" style="cursor: pointer;" title="Return to Dashboard">
                     <i class="fas fa-home"></i>
                     <span>MyEstateAlly</span>
                 </div>
 
+                <!-- CENTER: Estate selector — shown when authenticated -->
+                <div id="estate-selector" class="estate-selector" style="display: none;">
+                    <span class="estate-managing-label">
+                        <i class="fas fa-landmark"></i> Managing:
+                    </span>
+                    <select id="estate-select" class="estate-select" onchange="app.switchEstate(this.value)">
+                        <option value="">Select Estate…</option>
+                    </select>
+                    <button class="btn small estate-new-btn" onclick="app.showCreateEstateModal()" title="Create New Estate">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+
+                <!-- RIGHT: User menu + auth -->
                 <div class="header-actions">
-                    <!-- Estate Selector (when authenticated) -->
-                    <div id="estate-selector" class="estate-selector" style="display: none;">
-                        <select id="estate-select" class="estate-select" onchange="app.switchEstate(this.value)">
-                            <option value="">Select Estate...</option>
-                        </select>
-                        <button class="btn small" onclick="app.showCreateEstateModal()" title="Create New Estate">
-                            <i class="fas fa-plus"></i>
-                        </button>
-                    </div>
-                    
+
                     <!-- User Menu (when authenticated) -->
                     <div id="user-menu" class="user-menu" style="display: none;">
-                        <div class="user-info">
+                        <div class="user-info" title="Account menu">
+                            <i class="fas fa-user-circle header-user-icon"></i>
                             <span id="user-name">User Name</span>
                             <i class="fas fa-chevron-down"></i>
                         </div>
                         <div class="user-dropdown">
                             <a href="#" onclick="showUserProfile()">
-                                <i class="fas fa-user"></i> Profile
+                                <i class="fas fa-user"></i> My Profile
                             </a>
                             <a href="#" onclick="showAccountSettings()">
                                 <i class="fas fa-cog"></i> Settings
@@ -72,11 +74,17 @@
                             </a>
                             <hr>
                             <a href="#" onclick="logout()">
-                                <i class="fas fa-sign-out-alt"></i> Logout
+                                <i class="fas fa-sign-out-alt"></i> Sign Out
                             </a>
                         </div>
                     </div>
-                    
+
+                    <!-- Mobile estate indicator (shown by JS on small screens) -->
+                    <div class="mobile-estate-indicator" id="mobile-estate-indicator" onclick="app.openMobileMoreMenu()" style="display: none;">
+                        <i class="fas fa-bars"></i>
+                        <span class="estate-name-mobile" id="estate-name-mobile">Menu</span>
+                    </div>
+
                     <!-- Auth Buttons (when not authenticated) -->
                     <div id="auth-buttons" class="auth-buttons">
                         <button class="btn secondary" onclick="openModal('auth-modal')">
@@ -86,12 +94,12 @@
                             <i class="fas fa-user-plus"></i> Sign Up
                         </button>
                     </div>
-                    
+
                     <button id="install-btn" class="btn secondary" style="display: none;">
-                        <i class="fas fa-download"></i>
-                        Install MyEstateAlly App
+                        <i class="fas fa-download"></i> Install App
                     </button>
                 </div>
+
             </div>
         </div>
     </header>

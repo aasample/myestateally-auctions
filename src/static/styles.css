@@ -6557,6 +6557,157 @@ h1, h2, h3,
     font-weight: 700;
 }
 
+/* --- Header three-zone layout: Logo · Estate · User ----------- */
+.header-content {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+}
+
+/* Estate selector grows to fill the centre */
+.estate-selector {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    /* Reset legacy styles that don't suit dark header */
+    background: transparent;
+    border-right: none;
+    margin-right: 0;
+    padding-right: 0;
+}
+
+/* "Managing:" label */
+.estate-managing-label {
+    color: var(--gold);
+    font-weight: 700;
+    font-size: var(--font-size-sm);
+    white-space: nowrap;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    opacity: 0.92;
+}
+
+/* Estate dropdown — large, readable, gold-accented */
+.estate-select {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1.5px solid rgba(201, 168, 76, 0.55);
+    color: #ffffff;
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    min-width: 200px;
+    max-width: 320px;
+    padding: 9px 14px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: border-color var(--transition-fast), background var(--transition-fast);
+    /* Browsers don't let you fully style option bg — navy fallback */
+    -webkit-appearance: auto;
+}
+.estate-select option {
+    background: var(--navy);
+    color: #ffffff;
+}
+.estate-select:hover,
+.estate-select:focus {
+    border-color: var(--gold);
+    background: rgba(255, 255, 255, 0.15);
+    outline: none;
+}
+
+/* "+ New Estate" button next to the select */
+.estate-new-btn {
+    background: rgba(201, 168, 76, 0.18);
+    border: 1px solid rgba(201, 168, 76, 0.45);
+    color: var(--gold);
+    min-height: 42px;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    flex-shrink: 0;
+}
+.estate-new-btn:hover {
+    background: rgba(201, 168, 76, 0.3);
+    border-color: var(--gold);
+    color: #fff;
+}
+
+/* User menu button — white pill on dark header */
+.user-info {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1.5px solid rgba(255, 255, 255, 0.22);
+    color: #ffffff;
+    border-radius: var(--radius-md);
+    padding: 9px 14px;
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background var(--transition-fast), border-color var(--transition-fast);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+.user-info:hover {
+    background: rgba(255, 255, 255, 0.18);
+    border-color: rgba(201, 168, 76, 0.5);
+}
+
+.header-user-icon {
+    font-size: var(--font-size-xl);
+    color: var(--gold);
+}
+
+/* Dropdown panel — dark navy, gold border */
+.user-dropdown {
+    background: var(--navy-mid);
+    border: 1px solid rgba(201, 168, 76, 0.3);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+    border-radius: var(--radius-md);
+    min-width: 190px;
+}
+.user-dropdown a {
+    color: rgba(255, 255, 255, 0.88);
+    font-size: var(--font-size-sm);
+    padding: 13px 18px;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+.user-dropdown a:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: #ffffff;
+}
+/* Sign Out link — gold accent */
+.user-dropdown a:last-child {
+    color: var(--gold);
+}
+.user-dropdown a:last-child:hover {
+    background: rgba(201, 168, 76, 0.1);
+    color: var(--gold-light);
+}
+.user-dropdown hr {
+    border-color: rgba(201, 168, 76, 0.18);
+    margin: 4px 0;
+}
+
+/* Header right — shrink-wrap, don't grow */
+.header-actions {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+/* Hide the centre estate selector on small screens
+   (JS shows mobile-estate-indicator instead) */
+@media (max-width: 768px) {
+    .estate-selector {
+        display: none !important;
+    }
+    .estate-managing-label {
+        display: none;
+    }
+}
+
 /* ================================================================
    END GLAMOUR THEME
    ================================================================ */
