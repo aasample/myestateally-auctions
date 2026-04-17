@@ -1269,6 +1269,102 @@ def add_item():
             'error': 'Failed to add item'
         }), 500
 
+@app.route('/api/items/bulk', methods=['POST'])
+@require_auth
+@limiter.limit("20 per hour")
+def bulk_add_items():
+    """Add up to 30 inventory items in a single request (bulk photo import)."""
+    try:
+        user_id   = session.get('user_id')
+        estate_id = get_current_estate_id()
+        if not estate_id:
+            return jsonify({'success': False, 'error': 'No estate selected'}), 400
+        if not check_permission(user_id, estate_id, 'edit'):
+            return jsonify({'success': False, 'error': 'You do not have permission to add items'}), 403
+
+        data       = request.get_json() or {}
+        items_data = data.get('items', [])
+        if not isinstance(items_data, list) or not items_data:
+            return jsonify({'success': False, 'error': 'No items provided'}), 400
+        if len(items_data) > 30:
+            return jsonify({'success': False, 'error': 'Maximum 30 items per bulk import'}), 400
+
+        saved  = []
+        errors = []
+
+        for idx, item_data in enumerate(items_data):
+            try:
+                name = sanitize_string(item_data.get('name', ''), max_length=200)
+                if not name:
+                    errors.append(f"Item {idx + 1}: name is required")
+                    continue
+
+                category    = sanitize_string(item_data.get('category', ''),    max_length=100)
+                description = sanitize_string(item_data.get('description', ''), max_length=2000)
+                destination = item_data.get('destination', 'keep')
+                if destination not in ALLOWED_DESTINATIONS:
+                    destination = 'keep'
+
+                try:
+                    estimated_value = float(item_data.get('estimatedValue', 0))
+                    if estimated_value < 0 or estimated_value > 999999999:
+                        estimated_value = 0.0
+                except (ValueError, TypeError):
+                    estimated_value = 0.0
+
+                # Accept a single photo string (base64 data URL, ≤ 200 KB)
+                raw_photo   = item_data.get('photo', '')
+                raw_photos  = item_data.get('photos', [])
+                if not isinstance(raw_photos, list):
+                    raw_photos = []
+                if raw_photo and isinstance(raw_photo, str) and raw_photo not in raw_photos:
+                    raw_photos.insert(0, raw_photo)
+                photos = [p for p in raw_photos[:4]
+                          if isinstance(p, str) and p.startswith('data:image') and len(p) <= 200000]
+                primary_photo = photos[0] if photos else ''
+
+                item_id = str(uuid.uuid4())
+                item = {
+                    'id':              item_id,
+                    'estate_id':       estate_id,
+                    'name':            name,
+                    'category':        category,
+                    'description':     description,
+                    'familyHistory':   '',
+                    'estimatedValue':  estimated_value,
+                    'destination':     destination,
+                    'destinationDetail': '',
+                    'photo':           primary_photo,
+                    'photos':          photos,
+                    'dateAdded':       datetime.now().isoformat(),
+                    'lastModified':    datetime.now().isoformat(),
+                }
+
+                if firestore_add_inventory_item(item):
+                    saved.append(item)
+                else:
+                    errors.append(f"Item {idx + 1} ({name}): database save failed")
+
+            except Exception as e:
+                errors.append(f"Item {idx + 1}: {str(e)}")
+
+        if saved:
+            user_email = session.get('user_email', 'Unknown')
+            log_activity(
+                estate_id  = estate_id,
+                user_email = user_email,
+                action     = 'bulk_imported',
+                item_name  = f"{len(saved)} items",
+                details    = {'count': len(saved), 'source': 'bulk_photo_import'}
+            )
+
+        return jsonify({'success': True, 'saved': len(saved), 'errors': errors, 'items': saved})
+
+    except Exception as e:
+        logger.error(f"Error in bulk_add_items: {e}")
+        return jsonify({'success': False, 'error': 'Bulk import failed'}), 500
+
+
 @app.route('/api/items/<item_id>', methods=['PUT'])
 @require_auth
 @limiter.limit("50 per hour")

@@ -1310,6 +1310,312 @@ class MyEstateAllyApp {
         this.renderNewItemPhotoThumbnails();
     }
 
+    // ===================================================================
+    // BULK PHOTO IMPORT
+    // ===================================================================
+
+    /** Open modal and reset all bulk state */
+    showBulkPhotoImportModal() {
+        this.bulkPhotos  = [];  // [{dataUrl, name}]
+        this.bulkResults = [];  // [{photo,name,category,description,estimatedValue,include}]
+        this._bulkShowStep('upload');
+        const grid = document.getElementById('bulk-photo-grid');
+        if (grid) grid.innerHTML = '';
+        const actions = document.getElementById('bulk-upload-actions');
+        if (actions) actions.style.display = 'none';
+        const inp = document.getElementById('bulk-file-input');
+        if (inp) inp.value = '';
+        const modal = document.getElementById('bulk-photo-modal');
+        if (modal) modal.style.display = 'flex';
+    }
+
+    closeBulkPhotoModal() {
+        const modal = document.getElementById('bulk-photo-modal');
+        if (modal) modal.style.display = 'none';
+        this.bulkPhotos  = [];
+        this.bulkResults = [];
+        // reload inventory in case some were saved before close
+        this.loadInventory();
+    }
+
+    _bulkShowStep(step) {
+        ['upload', 'processing', 'review', 'done'].forEach(s => {
+            const el = document.getElementById(`bulk-step-${s}`);
+            if (el) el.style.display = (s === step) ? '' : 'none';
+        });
+    }
+
+    /** Handle file-input change or drop — compress and thumbnail each photo */
+    async handleBulkPhotoSelect(files) {
+        const fileList = Array.from(files || []);
+        if (!fileList.length) return;
+
+        const MAX = 30;
+        const available = MAX - this.bulkPhotos.length;
+        if (available <= 0) {
+            this.showMessage(`Maximum ${MAX} photos per batch`, 'warning');
+            return;
+        }
+        const toAdd = fileList.slice(0, available);
+        if (fileList.length > available) {
+            this.showMessage(`Only first ${available} photos added (${MAX} max per batch)`, 'warning');
+        }
+
+        // Show a temporary "loading…" placeholder while we compress
+        const grid = document.getElementById('bulk-photo-grid');
+        const placeholder = document.createElement('div');
+        placeholder.className = 'bulk-thumb bulk-thumb-loading';
+        placeholder.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        if (grid) grid.appendChild(placeholder);
+
+        for (const file of toAdd) {
+            const isImage = file.type.startsWith('image/') || !file.type;
+            const validExt = /\.(jpg|jpeg|png|heic|heif|webp|gif|bmp|avif)$/i.test(file.name);
+            if (!isImage && !validExt) continue;
+            if (file.size > 10 * 1024 * 1024) continue;
+            try {
+                let processedFile = file;
+                if (file.type === 'image/heic' || file.type === 'image/heif' ||
+                    file.name.toLowerCase().endsWith('.heic')) {
+                    processedFile = await this.convertHEICToJPEG(file);
+                }
+                const dataUrl = await this.compressItemPhoto(processedFile);
+                if (!dataUrl) continue;
+                // Use filename (minus extension) as initial name hint
+                const hint = file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
+                this.bulkPhotos.push({ dataUrl, hint });
+            } catch (e) {
+                console.warn('Skipping photo:', file.name, e);
+            }
+        }
+
+        if (grid && placeholder.parentNode) grid.removeChild(placeholder);
+        this._bulkRenderThumbs();
+
+        const actions = document.getElementById('bulk-upload-actions');
+        if (actions) actions.style.display = this.bulkPhotos.length ? 'flex' : 'none';
+        const countEl = document.getElementById('bulk-photo-count');
+        if (countEl) countEl.textContent =
+            `${this.bulkPhotos.length} photo${this.bulkPhotos.length !== 1 ? 's' : ''} ready`;
+    }
+
+    handleBulkDrop(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        const dt = event.dataTransfer;
+        if (dt && dt.files && dt.files.length) this.handleBulkPhotoSelect(dt.files);
+        const dz = document.getElementById('bulk-dropzone');
+        if (dz) dz.classList.remove('bulk-dropzone-over');
+    }
+
+    handleBulkDragOver(event) {
+        event.preventDefault();
+        const dz = document.getElementById('bulk-dropzone');
+        if (dz) dz.classList.add('bulk-dropzone-over');
+    }
+
+    handleBulkDragLeave() {
+        const dz = document.getElementById('bulk-dropzone');
+        if (dz) dz.classList.remove('bulk-dropzone-over');
+    }
+
+    removeBulkPhoto(index) {
+        this.bulkPhotos.splice(index, 1);
+        this._bulkRenderThumbs();
+        const actions = document.getElementById('bulk-upload-actions');
+        if (actions) actions.style.display = this.bulkPhotos.length ? 'flex' : 'none';
+        const countEl = document.getElementById('bulk-photo-count');
+        if (countEl) countEl.textContent =
+            `${this.bulkPhotos.length} photo${this.bulkPhotos.length !== 1 ? 's' : ''} ready`;
+    }
+
+    _bulkRenderThumbs() {
+        const grid = document.getElementById('bulk-photo-grid');
+        if (!grid) return;
+        grid.innerHTML = this.bulkPhotos.map((p, i) => `
+            <div class="bulk-thumb">
+                <img src="${p.dataUrl}" alt="Photo ${i + 1}">
+                <button class="bulk-thumb-remove" onclick="app.removeBulkPhoto(${i})" title="Remove">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `).join('');
+    }
+
+    /** Run AI lookup on every photo in sequence, with progress */
+    async runBulkAILookup() {
+        if (!this.bulkPhotos.length) return;
+        this._bulkShowStep('processing');
+        this.bulkResults = [];
+
+        const total = this.bulkPhotos.length;
+        const fill = document.getElementById('bulk-progress-fill');
+        const txt  = document.getElementById('bulk-progress-text');
+
+        for (let i = 0; i < total; i++) {
+            if (txt)  txt.textContent  = `Identifying photo ${i + 1} of ${total}…`;
+            if (fill) fill.style.width = `${Math.round((i / total) * 100)}%`;
+
+            const photo = this.bulkPhotos[i];
+            const result = {
+                photo: photo.dataUrl,
+                name:  '',
+                category: '',
+                description: '',
+                estimatedValue: 0,
+                confidence: '',
+                include: true
+            };
+
+            try {
+                const resp = await fetch('/api/ai/lookup-item', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ photos: [photo.dataUrl] })
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (data.success && data.lookup) {
+                        const l = data.lookup;
+                        result.name          = l.item_name    || photo.hint || `Item ${i + 1}`;
+                        result.category      = l.category     || '';
+                        result.description   = l.description  || '';
+                        result.estimatedValue = l.estimated_value || 0;
+                        result.confidence    = l.confidence   || '';
+                    }
+                }
+            } catch (e) {
+                console.warn(`AI lookup failed for photo ${i + 1}:`, e);
+            }
+
+            // Fallback name from filename hint if AI gave nothing
+            if (!result.name) result.name = photo.hint || `Item ${i + 1}`;
+            this.bulkResults.push(result);
+        }
+
+        if (fill) fill.style.width = '100%';
+        if (txt)  txt.textContent  = 'All done! Review your items below.';
+        await new Promise(r => setTimeout(r, 500));
+
+        this._bulkRenderReview();
+        this._bulkShowStep('review');
+    }
+
+    _bulkRenderReview() {
+        const grid     = document.getElementById('bulk-review-grid');
+        const countEl  = document.getElementById('bulk-review-count');
+        if (!grid) return;
+
+        const included = this.bulkResults.filter(r => r.include).length;
+        if (countEl) countEl.textContent =
+            `${included} item${included !== 1 ? 's' : ''} ready to save`;
+
+        const CATS = ['Furniture','Jewelry','Electronics','Art','Books','Clothing','Other'];
+        const catOpts = CATS.map(c => `<option value="${c}">${c}</option>`).join('');
+
+        grid.innerHTML = this.bulkResults.map((item, i) => `
+            <div class="bulk-review-card${!item.include ? ' bulk-excluded' : ''}" id="bulk-card-${i}">
+                <div class="bulk-card-photo">
+                    <img src="${item.photo}" alt="Item ${i + 1}">
+                    ${item.confidence ? `<span class="bulk-confidence bulk-conf-${item.confidence}">${item.confidence}</span>` : ''}
+                    <button class="bulk-card-toggle" onclick="app.toggleBulkItem(${i})"
+                        title="${item.include ? 'Remove from import' : 'Add back'}">
+                        <i class="fas fa-${item.include ? 'times' : 'plus'}"></i>
+                    </button>
+                </div>
+                <div class="bulk-card-fields">
+                    <input  class="bulk-field" type="text"   placeholder="Item name *"
+                        value="${this._esc(item.name)}"
+                        oninput="app.updateBulkItem(${i},'name',this.value)">
+                    <select class="bulk-field" onchange="app.updateBulkItem(${i},'category',this.value)">
+                        <option value="">Category…</option>
+                        ${catOpts}
+                    </select>
+                    <input  class="bulk-field" type="number" placeholder="Est. Value $" min="0"
+                        value="${item.estimatedValue || ''}"
+                        oninput="app.updateBulkItem(${i},'estimatedValue',parseFloat(this.value)||0)">
+                    <textarea class="bulk-field bulk-field-desc" rows="2"
+                        placeholder="Description (optional)"
+                        oninput="app.updateBulkItem(${i},'description',this.value)">${this._esc(item.description)}</textarea>
+                </div>
+            </div>
+        `).join('');
+
+        // Restore select values after DOM is written
+        this.bulkResults.forEach((item, i) => {
+            const sel = document.querySelector(`#bulk-card-${i} select`);
+            if (sel && item.category) sel.value = item.category;
+        });
+    }
+
+    _esc(str) {
+        return (str || '')
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;');
+    }
+
+    updateBulkItem(index, field, value) {
+        if (this.bulkResults[index]) this.bulkResults[index][field] = value;
+    }
+
+    toggleBulkItem(index) {
+        if (!this.bulkResults[index]) return;
+        this.bulkResults[index].include = !this.bulkResults[index].include;
+        this._bulkRenderReview();
+    }
+
+    /** POST all included items to the bulk-save endpoint */
+    async saveBulkItems() {
+        const toSave = this.bulkResults.filter(r => r.include && r.name.trim());
+        if (!toSave.length) {
+            this.showMessage('No items to save — check that each item has a name', 'warning');
+            return;
+        }
+
+        const btns = document.querySelectorAll('#bulk-step-review .btn.primary');
+        btns.forEach(b => { b.disabled = true; b.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…'; });
+
+        try {
+            const resp = await fetch('/api/items/bulk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    items: toSave.map(r => ({
+                        name:           r.name.trim(),
+                        category:       r.category     || '',
+                        description:    r.description  || '',
+                        estimatedValue: r.estimatedValue || 0,
+                        destination:    'keep',
+                        photo:          r.photo,
+                        photos:         [r.photo]
+                    }))
+                })
+            });
+
+            const data = await resp.json();
+            if (data.success) {
+                const titleEl = document.getElementById('bulk-done-title');
+                const msgEl   = document.getElementById('bulk-done-message');
+                if (titleEl) titleEl.textContent =
+                    `${data.saved} Item${data.saved !== 1 ? 's' : ''} Added!`;
+                if (msgEl) {
+                    let msg = `Successfully added ${data.saved} item${data.saved !== 1 ? 's' : ''} to your inventory.`;
+                    if (data.errors && data.errors.length)
+                        msg += ` (${data.errors.length} item${data.errors.length !== 1 ? 's' : ''} could not be saved)`;
+                    msgEl.textContent = msg;
+                }
+                this._bulkShowStep('done');
+                this.loadInventory();
+            } else {
+                throw new Error(data.error || 'Save failed');
+            }
+        } catch (e) {
+            this.showMessage(e.message || 'Failed to save items. Please try again.', 'error');
+            btns.forEach(b => { b.disabled = false; b.innerHTML = '<i class="fas fa-save"></i> Save All Items'; });
+        }
+    }
+
     /**
      * Show inline QR panel for mobile photo capture in the Add Item modal.
      */

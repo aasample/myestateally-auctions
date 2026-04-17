@@ -334,6 +334,10 @@
                             <i class="fas fa-sync"></i>
                             Refresh
                         </button>
+                        <button class="btn secondary" onclick="app.showBulkPhotoImportModal()">
+                            <i class="fas fa-images"></i>
+                            Bulk Photo Import
+                        </button>
                         <button class="btn primary" id="add-inventory-item">
                             <i class="fas fa-plus"></i>
                             Add Item
@@ -2166,6 +2170,99 @@
     </div>
 
     <!-- Mobile More Menu Modal -->
+    <!-- ================================================================
+         BULK PHOTO IMPORT MODAL
+         ================================================================ -->
+    <div id="bulk-photo-modal" class="modal bulk-photo-modal" style="display:none;"
+         role="dialog" aria-modal="true" aria-labelledby="bulk-modal-title">
+        <div class="modal-overlay" onclick="app.closeBulkPhotoModal()"></div>
+        <div class="modal-content bulk-modal-content">
+            <div class="modal-header">
+                <h2 id="bulk-modal-title"><i class="fas fa-images"></i> Bulk Photo Import</h2>
+                <button class="close-btn" onclick="app.closeBulkPhotoModal()" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body bulk-modal-body">
+
+                <!-- ── Step 1: Upload ── -->
+                <div id="bulk-step-upload" class="bulk-step">
+                    <p class="bulk-hint">
+                        Select up to <strong>30 photos</strong> from your device.
+                        AI will identify each item and fill in the details for you.
+                    </p>
+                    <div class="bulk-dropzone" id="bulk-dropzone"
+                         onclick="document.getElementById('bulk-file-input').click()"
+                         ondragover="app.handleBulkDragOver(event)"
+                         ondragleave="app.handleBulkDragLeave()"
+                         ondrop="app.handleBulkDrop(event)">
+                        <i class="fas fa-cloud-upload-alt bulk-dropzone-icon"></i>
+                        <p class="bulk-dropzone-title">Tap to choose photos</p>
+                        <p class="bulk-dropzone-sub">or drag &amp; drop here</p>
+                        <p class="bulk-dropzone-sub">JPG &bull; PNG &bull; HEIC &bull; up to 30 photos</p>
+                    </div>
+                    <input type="file" id="bulk-file-input" multiple accept="image/*"
+                           style="display:none"
+                           onchange="app.handleBulkPhotoSelect(this.files)">
+
+                    <div id="bulk-photo-grid" class="bulk-photo-grid"></div>
+
+                    <div id="bulk-upload-actions" class="bulk-actions-row" style="display:none;">
+                        <span id="bulk-photo-count" class="bulk-count-badge"></span>
+                        <div class="bulk-upload-btns">
+                            <button class="btn secondary" onclick="document.getElementById('bulk-file-input').click()">
+                                <i class="fas fa-plus"></i> Add More
+                            </button>
+                            <button class="btn primary" onclick="app.runBulkAILookup()">
+                                <i class="fas fa-robot"></i> Identify All with AI
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── Step 2: Processing ── -->
+                <div id="bulk-step-processing" class="bulk-step bulk-step-center" style="display:none;">
+                    <i class="fas fa-robot bulk-robot-icon"></i>
+                    <h3>AI is identifying your items&hellip;</h3>
+                    <p class="bulk-hint">This takes a few seconds per photo. Please wait.</p>
+                    <div class="bulk-progress-track">
+                        <div id="bulk-progress-fill" class="bulk-progress-fill"></div>
+                    </div>
+                    <p id="bulk-progress-text" class="bulk-progress-text">Starting&hellip;</p>
+                </div>
+
+                <!-- ── Step 3: Review ── -->
+                <div id="bulk-step-review" class="bulk-step" style="display:none;">
+                    <div class="bulk-review-header">
+                        <p class="bulk-hint">Edit any fields before saving. Tap <i class="fas fa-times"></i> on a card to skip that item.</p>
+                        <div class="bulk-review-top-actions">
+                            <span id="bulk-review-count" class="bulk-count-badge"></span>
+                            <button class="btn primary" onclick="app.saveBulkItems()">
+                                <i class="fas fa-save"></i> Save All Items
+                            </button>
+                        </div>
+                    </div>
+                    <div id="bulk-review-grid" class="bulk-review-grid"></div>
+                    <div class="bulk-bottom-bar">
+                        <button class="btn secondary" onclick="app.closeBulkPhotoModal()">Cancel</button>
+                        <button class="btn primary" onclick="app.saveBulkItems()">
+                            <i class="fas fa-save"></i> Save All Items
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ── Step 4: Done ── -->
+                <div id="bulk-step-done" class="bulk-step bulk-step-center" style="display:none;">
+                    <i class="fas fa-check-circle bulk-done-icon"></i>
+                    <h3 id="bulk-done-title">Items Saved!</h3>
+                    <p id="bulk-done-message" class="bulk-hint"></p>
+                    <button class="btn primary" onclick="app.closeBulkPhotoModal()">
+                        <i class="fas fa-boxes"></i> View Inventory
+                    </button>
+                </div>
+
+            </div><!-- /modal-body -->
+        </div><!-- /modal-content -->
+    </div><!-- /bulk-photo-modal -->
+
     <div id="mobile-more-menu" class="mobile-more-menu" style="display: none;">
         <div class="more-menu-header">
             <h3>More Options</h3>
@@ -2186,6 +2283,10 @@
             </div>
             <hr style="margin: 0;">
 
+            <button class="more-menu-item" onclick="app.switchTab('inventory'); app.closeMobileMoreMenu(); app.setActiveBottomNav(null); setTimeout(()=>app.showBulkPhotoImportModal(),200);">
+                <i class="fas fa-images"></i>
+                <span>Bulk Photo Import</span>
+            </button>
             <button class="more-menu-item" data-section="ai-pricing" onclick="app.switchTab('ai-pricing'); app.closeMobileMoreMenu(); app.setActiveBottomNav(null);">
                 <i class="fas fa-search-dollar"></i>
                 <span>AI Pricing</span>
