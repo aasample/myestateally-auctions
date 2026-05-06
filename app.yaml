@@ -23,7 +23,7 @@ env_variables:
   MAIL_USE_TLS: "true"
   MAIL_DEFAULT_SENDER: "MyEstateAlly <myestateally33@gmail.com>"
   APP_BASE_URL: "https://estateally-ai-services.ue.r.appspot.com"
-  GEMINI_API_KEY: "AIzaSyD23IMwusS1LkdU7cH-f5_IeI4fo_TeEDA"
+  # GEMINI_API_KEY — stored in Google Cloud Secret Manager (secret name: GEMINI_API_KEY)
 
 handlers:
 - url: /static
