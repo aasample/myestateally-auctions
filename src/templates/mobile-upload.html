@@ -116,18 +116,37 @@
         class MobileUploadApp {
             constructor() {
                 this.sessionId = '{{ session_id }}';
+                this.mode = new URLSearchParams(window.location.search).get('mode') || 'full';
                 this.selectedFile = null;
                 this.init();
             }
 
             init() {
+                if (this.mode === 'addphoto') {
+                    this.initAddPhotoMode();
+                } else {
+                    this.setupEventListeners();
+                    this.checkConnection();
+                }
+            }
+
+            initAddPhotoMode() {
+                const h1 = document.querySelector('.mobile-header h1');
+                const subtitle = document.querySelector('.mobile-header p');
+                if (h1) h1.innerHTML = '<i class="fas fa-camera"></i> Add Photo';
+                if (subtitle) subtitle.textContent = 'Take or select a photo to add to your item.';
+                const troubleshootingSection = document.querySelector('.troubleshooting-section');
+                if (troubleshootingSection) troubleshootingSection.style.display = 'none';
+                const connectionStatus = document.getElementById('connection-status');
+                if (connectionStatus) connectionStatus.style.display = 'none';
+                const refreshMainBtn = document.getElementById('refresh-main-btn');
+                if (refreshMainBtn) refreshMainBtn.style.display = 'none';
                 this.setupEventListeners();
-                this.checkConnection();
             }
 
             async checkConnection() {
                 try {
-                    const response = await fetch('/api/qr/generate', { method: 'POST' });
+                    const response = await fetch('/mobile-upload?session=' + encodeURIComponent(this.sessionId));
                     const indicator = document.getElementById('connection-indicator');
                     if (response.ok) {
                         indicator.innerHTML = '✅ Connected to server';
@@ -244,21 +263,16 @@
                 this.showLoading();
 
                 try {
-                    // Test connection first
-                    console.log('Testing connection...');
-                    const testResponse = await fetch('/api/qr/generate', { method: 'POST' });
-                    if (!testResponse.ok) {
-                        throw new Error(`Connection test failed: ${testResponse.status} ${testResponse.statusText}`);
-                    }
-                    console.log('Connection test passed');
-
                     const formData = new FormData();
                     formData.append('photo', this.selectedFile);
                     formData.append('session_id', this.sessionId);
 
                     console.log('Uploading file:', this.selectedFile.name, 'Session ID:', this.sessionId);
 
-                    const response = await fetch('/api/mobile/upload', {
+                    const endpoint = this.mode === 'addphoto'
+                        ? `/api/qr/photo-submit/${this.sessionId}`
+                        : '/api/mobile/upload';
+                    const response = await fetch(endpoint, {
                         method: 'POST',
                         body: formData
                     });
@@ -285,18 +299,20 @@
                     console.log('Parsed result:', result);
 
                     if (result.success) {
-                        let successMessage = result.message || 'Photo uploaded successfully!';
-                        if (result.item) {
-                            successMessage += `\n\nItem: ${result.item.name}\nCategory: ${result.item.category}\nEstimated Value: $${result.item.estimatedValue.toFixed(2)}`;
-                        }
-                        this.showSuccess(successMessage);
-                        
-                        // Notify the main window to refresh inventory if it's open
-                        if (window.opener && !window.opener.closed) {
-                            try {
-                                window.opener.postMessage({type: 'inventory_updated'}, '*');
-                            } catch (e) {
-                                console.log('Could not notify parent window');
+                        if (this.mode === 'addphoto') {
+                            this.showSuccess('Photo sent!<br><strong>Return to your computer to continue.</strong>');
+                        } else {
+                            let successMessage = result.message || 'Photo uploaded successfully!';
+                            if (result.item) {
+                                successMessage += `\n\nItem: ${result.item.name}\nCategory: ${result.item.category}\nEstimated Value: $${result.item.estimatedValue.toFixed(2)}`;
+                            }
+                            this.showSuccess(successMessage);
+                            if (window.opener && !window.opener.closed) {
+                                try {
+                                    window.opener.postMessage({type: 'inventory_updated'}, '*');
+                                } catch (e) {
+                                    console.log('Could not notify parent window');
+                                }
                             }
                         }
                     } else {
@@ -323,7 +339,12 @@
 
             showLoading() {
                 document.getElementById('preview-container').style.display = 'none';
-                document.getElementById('loading-container').style.display = 'block';
+                const loadingContainer = document.getElementById('loading-container');
+                loadingContainer.style.display = 'block';
+                if (this.mode === 'addphoto') {
+                    const p = loadingContainer.querySelector('p');
+                    if (p) p.textContent = 'Sending photo...';
+                }
             }
 
             hideLoading() {

@@ -14,9 +14,16 @@ env_variables:
   FLASK_DEBUG: false
   USE_FIRESTORE: "true"  # Native Mode Firestore - data persists permanently!
   GOOGLE_CLOUD_PROJECT: estateally-ai-services
-  GOOGLE_REDIRECT_URI: https://estateally-ai-services.ue.r.appspot.com/auth/google/callback
+  GOOGLE_REDIRECT_URI: https://www.myestateally.com/auth/google/callback
   REQUIRE_AUTH_FOR_ALL: "false"  # Allow beta testing without auth
-  BETA_CODE: "ESTATEALLY2026"  # Beta testing access code
+  # BETA_CODE stored in Secret Manager
+  # Email Configuration (credentials stored in Secret Manager)
+  MAIL_SERVER: "smtp.gmail.com"
+  MAIL_PORT: "587"
+  MAIL_USE_TLS: "true"
+  MAIL_DEFAULT_SENDER: "MyEstateAlly <myestateally33@gmail.com>"
+  APP_BASE_URL: "https://estateally-ai-services.ue.r.appspot.com"
+  GEMINI_API_KEY: "AIzaSyD23IMwusS1LkdU7cH-f5_IeI4fo_TeEDA"
 
 handlers:
 - url: /static

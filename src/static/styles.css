@@ -5625,27 +5625,33 @@ p {
         color: var(--text-dark);
     }
 
-    /* Estate Indicator in Header (hamburger + estate name) */
+    /* Estate Indicator in Header (hamburger + estate name)
+       Uses explicit colours — the glamour theme's dark navy header means the
+       undefined variables --bg-lighter / --text-dark would fall back to
+       transparent / initial and become invisible. */
     .mobile-estate-indicator {
         display: none; /* Shown via JS when authenticated */
         align-items: center;
         gap: 8px;
         padding: 8px 12px;
-        background: var(--bg-lighter);
+        background: rgba(255, 255, 255, 0.10);
+        border: 1.5px solid rgba(201, 168, 76, 0.45);
         border-radius: 8px;
         cursor: pointer;
         justify-content: flex-start;
         max-width: 250px;
+        transition: background 0.2s ease, border-color 0.2s ease;
     }
 
     .mobile-estate-indicator:hover {
-        background: var(--border-light);
+        background: rgba(255, 255, 255, 0.18);
+        border-color: rgba(201, 168, 76, 0.75);
     }
 
     .estate-name-mobile {
         font-size: 0.875rem;
         font-weight: 600;
-        color: var(--text-dark);
+        color: #ffffff;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -5653,7 +5659,7 @@ p {
 
     .mobile-estate-indicator i {
         font-size: 1.1rem;
-        color: var(--primary-color);
+        color: var(--gold, #c9a84c);
     }
 
     @media (max-width: 768px) {
@@ -6885,9 +6891,12 @@ h1, h2, h3,
    BULK PHOTO IMPORT MODAL
    ================================================================ */
 
-/* Modal shell — centred overlay */
+/* Modal shell — centred overlay
+   NO display property here. The element also carries class="modal" which sets
+   display:none by default. JS sets display:flex inline to open, display:none
+   to close. Any display rule in this block (even without !important) can fight
+   the class="modal" rule since both are specificity 0,0,1,0 — just omit it. */
 .bulk-photo-modal {
-    display: flex !important;
     align-items: center;
     justify-content: center;
     position: fixed;

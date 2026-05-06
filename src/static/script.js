@@ -40,6 +40,11 @@ class MyEstateAllyApp {
     async init() {
         console.log('MyEstateAlly app initializing...');
 
+        // Hard-close every modal on startup — guards against a stale cached
+        // stylesheet that has display:flex (or display:flex !important) on a
+        // modal class, which would override the inline style="display:none".
+        document.querySelectorAll('.modal').forEach(m => { m.style.display = 'none'; });
+
         // Wait for auth check to complete BEFORE loading dashboard data
         const isAuthenticated = await this.checkAuthStatus();
 

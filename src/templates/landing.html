@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyEstateAlly - When Loss Meets Logistics, We're Here to Help</title>
+    <meta name="description" content="Born from personal experience with estate management during grief. A simple, honest place to organize belongings, documents, and memories - whether closing an estate or downsizing.">
+
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Main App Styles (for auth modal and shared components) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-color: #2563eb;
+            --primary-dark: #1e40af;
+            --text-dark: #1f2937;
+            --text-medium: #4b5563;
+            --text-light: #6b7280;
+            --bg-light: #f9fafb;
+            --bg-lighter: #f3f4f6;
+            --white: #ffffff;
+            --border: #e5e7eb;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            color: var(--text-dark);
+            line-height: 1.7;
+            background: var(--white);
+        }
+
+        /* Header */
+        .header {
+            background: var(--white);
+            padding: 1.25rem 0;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .logo i {
+            font-size: 1.75rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1.75rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        }
+
+        /* Hero Section */
+        .hero {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            padding: 5rem 0;
+            text-align: center;
+        }
+
+        .hero h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            color: var(--text-dark);
+            margin-bottom: 1.5rem;
+            line-height: 1.2;
+        }
+
+        .hero .subtitle {
+            font-size: 1.5rem;
+            color: var(--text-medium);
+            margin-bottom: 2.5rem;
+            font-weight: 400;
+        }
+
+        .hero .cta {
+            margin-top: 2rem;
+        }
+
+        /* Story Section */
+        .story {
+            padding: 5rem 0;
+            background: var(--white);
+        }
+
+        .story-content {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .story h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .story-text {
+            font-size: 1.125rem;
+            color: var(--text-medium);
+            line-height: 1.8;
+            margin-bottom: 1.5rem;
+        }
+
+        .story-highlight {
+            background: var(--bg-light);
+            border-left: 4px solid var(--primary-color);
+            padding: 1.5rem 2rem;
+            margin: 2rem 0;
+            font-size: 1.25rem;
+            font-style: italic;
+            color: var(--text-dark);
+        }
+
+        /* Problem Section */
+        .problem {
+            padding: 5rem 0;
+            background: var(--bg-light);
+        }
+
+        .problem h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .problem-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .problem-card {
+            background: var(--white);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .problem-card i {
+            font-size: 2.5rem;
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+        }
+
+        .problem-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: var(--text-dark);
+        }
+
+        .problem-card p {
+            color: var(--text-medium);
+            font-size: 1rem;
+        }
+
+        /* Solution Section */
+        .solution {
+            padding: 5rem 0;
+            background: var(--white);
+        }
+
+        .solution h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        .solution .intro {
+            text-align: center;
+            font-size: 1.25rem;
+            color: var(--text-medium);
+            max-width: 700px;
+            margin: 0 auto 3rem;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2.5rem;
+            margin-top: 3rem;
+        }
+
+        .feature {
+            text-align: center;
+        }
+
+        .feature-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--primary-color), #7c3aed);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.5rem;
+            color: white;
+            font-size: 2rem;
+        }
+
+        .feature h3 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: var(--text-dark);
+        }
+
+        .feature p {
+            color: var(--text-medium);
+            font-size: 1rem;
+        }
+
+        /* Trust Section */
+        .trust {
+            padding: 5rem 0;
+            background: var(--bg-lighter);
+        }
+
+        .trust-content {
+            max-width: 800px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .trust h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 2rem;
+        }
+
+        .trust-points {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .trust-point {
+            background: var(--white);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .trust-point i {
+            font-size: 2rem;
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+        }
+
+        .trust-point h3 {
+            font-size: 1.25rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .trust-point p {
+            color: var(--text-medium);
+            font-size: 0.95rem;
+        }
+
+        /* CTA Section */
+        .cta-section {
+            padding: 5rem 0;
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            color: white;
+            text-align: center;
+        }
+
+        .cta-section h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .cta-section p {
+            font-size: 1.25rem;
+            margin-bottom: 2rem;
+            opacity: 0.95;
+        }
+
+        .btn-white {
+            background: white;
+            color: var(--primary-color);
+        }
+
+        .btn-white:hover {
+            background: var(--bg-light);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Footer */
+        .footer {
+            background: var(--text-dark);
+            color: white;
+            padding: 2rem 0;
+            text-align: center;
+        }
+
+        .footer p {
+            margin: 0.5rem 0;
+            opacity: 0.8;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2rem;
+            }
+
+            .hero .subtitle {
+                font-size: 1.125rem;
+            }
+
+            .story h2, .problem h2, .solution h2, .trust h2, .cta-section h2 {
+                font-size: 1.875rem;
+            }
+
+            .container {
+                padding: 0 1.5rem;
+            }
+
+            .hero {
+                padding: 3rem 0;
+            }
+
+            .story, .problem, .solution, .trust, .cta-section {
+                padding: 3rem 0;
+            }
+
+            /* On mobile, hide "Get Started Free" from nav — the hero has it covered.
+               Keep only the Sign In button so it's not squished off-screen. */
+            .nav-get-started {
+                display: none;
+            }
+        }
+
+        /* Auth Modal (keep from original) */
+        .modal {
+            display: none;  /* Hidden by default — JS opens it on CTA click */
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #6b7280;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+        }
+
+        .close-btn:hover {
+            background: #f3f4f6;
+        }
+
+        .modal-body {
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .modal-body i {
+            font-size: 3rem;
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+        }
+
+        .modal-body h4 {
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+        }
+
+        .modal-body p {
+            color: var(--text-light);
+            margin-bottom: 2rem;
+        }
+
+        .btn-large {
+            padding: 1rem 2rem;
+            font-size: 1.125rem;
+            width: 100%;
+            justify-content: center;
+        }
+
+        /* ── Dark-mode overrides ─────────────────────────────────────────
+           styles.css has aggressive dark-mode !important rules (body white,
+           all .btn white) that override our inline styles and lower-specificity
+           rules.  We fight back by prefixing every selector with
+           "body.landing-page" which gives specificity 0,1,1,0 vs
+           styles.css's 0,0,1,0 — higher specificity always wins, even
+           against !important of equal or lower specificity. */
+        @media (prefers-color-scheme: dark) {
+            /* Keep the page light — this is a brand landing page, not a dark app */
+            body.landing-page {
+                background-color: #ffffff !important;
+                color: #1f2937 !important;
+            }
+
+            /* Header — white bar */
+            body.landing-page .header {
+                background: #ffffff !important;
+                box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12) !important;
+            }
+            body.landing-page .logo,
+            body.landing-page .logo i { color: #2563eb !important; }
+
+            /* ── Nav buttons ── */
+            /* "Log In" — outline style: blue border, blue text, transparent bg */
+            body.landing-page .btn-secondary {
+                background: transparent !important;
+                color: #2563eb !important;
+                border-color: #2563eb !important;
+            }
+            /* "Get Started Free" (nav) + "Start Organizing Free" (hero) */
+            body.landing-page .btn-primary {
+                background: #2563eb !important;
+                color: #ffffff !important;
+            }
+            /* Bottom-CTA white button */
+            body.landing-page .btn-white {
+                background: #ffffff !important;
+                color: #2563eb !important;
+            }
+
+            /* ── Hero ── */
+            body.landing-page .hero {
+                background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%) !important;
+            }
+            body.landing-page .hero h1       { color: #1f2937 !important; }
+            body.landing-page .hero .subtitle { color: #4b5563 !important; }
+            body.landing-page .hero .cta > p  { color: #4b5563 !important; opacity: 1 !important; }
+            body.landing-page .hero .cta > p a { color: #1f2937 !important; }
+
+            /* ── Story ── */
+            body.landing-page .story         { background: #ffffff !important; }
+            body.landing-page .story h2      { color: #1f2937 !important; }
+            body.landing-page .story-text    { color: #4b5563 !important; }
+            body.landing-page .story-highlight {
+                background: #f9fafb !important;
+                color: #1f2937 !important;
+            }
+
+            /* ── Problem ── */
+            body.landing-page .problem       { background: #f9fafb !important; }
+            body.landing-page .problem h2    { color: #1f2937 !important; }
+            body.landing-page .problem-card  { background: #ffffff !important; }
+            body.landing-page .problem-card h3 { color: #1f2937 !important; }
+            body.landing-page .problem-card p  { color: #4b5563 !important; }
+
+            /* ── Solution ── */
+            body.landing-page .solution      { background: #ffffff !important; }
+            body.landing-page .solution h2   { color: #1f2937 !important; }
+            body.landing-page .solution .intro { color: #4b5563 !important; }
+            body.landing-page .feature h3    { color: #1f2937 !important; }
+            body.landing-page .feature p     { color: #4b5563 !important; }
+
+            /* ── Trust ── */
+            body.landing-page .trust         { background: #f3f4f6 !important; }
+            body.landing-page .trust h2      { color: #1f2937 !important; }
+            body.landing-page .trust-point   { background: #ffffff !important; }
+            body.landing-page .trust-point h3 { color: #1f2937 !important; }
+            body.landing-page .trust-point p  { color: #4b5563 !important; }
+
+            /* ── Footer ── */
+            body.landing-page .footer        { background: #1f2937 !important; }
+            body.landing-page .footer p      { color: rgba(255,255,255,0.85) !important; }
+        }
+    </style>
+</head>
+<body class="landing-page">
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <a href="/" class="logo">
+                    <i class="fas fa-home"></i>
+                    <span>MyEstateAlly</span>
+                </a>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <a href="javascript:app.openAuthModal()" class="btn btn-secondary" style="background: transparent; color: var(--primary-color); border: 2px solid var(--primary-color);">
+                        <i class="fas fa-sign-in-alt"></i> Log In
+                    </a>
+                    <a href="javascript:app.openAuthModal()" class="btn btn-primary nav-get-started">
+                        <i class="fas fa-star"></i> Get Started Free
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <h1>Organize Life's Hardest Transitions</h1>
+            <p class="subtitle">Estate management and downsizing made simple—<br>created by someone who learned the hard way</p>
+            <div class="cta">
+                <a href="javascript:app.openAuthModal()" class="btn btn-primary btn-large">
+                    Start Organizing Free <i class="fas fa-arrow-right"></i>
+                </a>
+                <p style="margin-top: 1rem; font-size: 1.1rem; color: var(--text-medium);">
+                    Already have an account?
+                    <a href="javascript:app.openAuthModal()" style="color: var(--text-dark); font-weight: 700; text-decoration: underline;">
+                        Log In
+                    </a>
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Story Section -->
+    <section class="story">
+        <div class="container">
+            <div class="story-content">
+                <h2>Why MyEstateAlly Exists</h2>
+
+                <p class="story-text">
+                    I experienced every child's worst nightmare—twice. My dad passed away suddenly in March.
+                    Just weeks later, in April, I gave birth to my first child, Abby. My younger sister also welcomed a premature baby that same month.
+                    We should have been celebrating new life, but instead, we watched my mom struggle to manage my dad's estate while grieving.
+                </p>
+
+                <p class="story-text">
+                    Then in September, my mom passed away unexpectedly too.
+                </p>
+
+                <div class="story-highlight">
+                    "I was supposed to be experiencing the happiest time of my life. Instead, I was managing two estates,
+                    caring for a newborn, working full-time, and trying to support my sister 17 hours away."
+                </div>
+
+                <p class="story-text">
+                    The logistics were overwhelming. The paperwork was endless. The decisions were constant.
+                    And through it all, I kept thinking: <strong>there has to be a better way</strong>.
+                </p>
+
+                <p class="story-text">
+                    MyEstateAlly was born from that experience. Whether you're closing an estate or simply downsizing,
+                    you deserve a simple, private place to organize your thoughts, documents, and belongings—without the fluff,
+                    without the sales pitches, and without your data being sold to the highest bidder.
+                </p>
+
+                <p class="story-text" style="font-weight: 600; text-align: center; margin-top: 2rem;">
+                    This is the tool I wish I'd had. Now it's here for you.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Problem Section -->
+    <section class="problem">
+        <div class="container">
+            <h2>You're Not Alone in Feeling Overwhelmed</h2>
+
+            <div class="problem-grid">
+                <div class="problem-card">
+                    <i class="fas fa-clock"></i>
+                    <h3>It Takes Forever</h3>
+                    <p>The average family spends 200+ hours sorting through belongings, with no clear starting point or system.</p>
+                </div>
+
+                <div class="problem-card">
+                    <i class="fas fa-users"></i>
+                    <h3>Family Tension</h3>
+                    <p>Without clear records, disagreements arise over who gets what, and memories get lost in the chaos.</p>
+                </div>
+
+                <div class="problem-card">
+                    <i class="fas fa-file-alt"></i>
+                    <h3>Lost Documents</h3>
+                    <p>Critical papers disappear, values are unknown, and you're left guessing what needs to be done next.</p>
+                </div>
+
+                <div class="problem-card">
+                    <i class="fas fa-brain"></i>
+                    <h3>Mental Load</h3>
+                    <p>When you're already grieving or making big life changes, the last thing you need is more complexity.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Solution Section -->
+    <section class="solution">
+        <div class="container">
+            <h2>A Simple System That Actually Helps</h2>
+            <p class="intro">
+                No gimmicks. No upsells. Just the tools you need to organize, distribute, and move forward.
+            </p>
+
+            <div class="features-grid">
+                <div class="feature">
+                    <div class="feature-icon">
+                        <i class="fas fa-camera"></i>
+                    </div>
+                    <h3>Photo Inventory</h3>
+                    <p>Take pictures, and our AI helps identify items and estimate values—no manual data entry required.</p>
+                </div>
+
+                <div class="feature">
+                    <div class="feature-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <h3>Family Sharing</h3>
+                    <p>Invite family members, let them claim items that matter to them, and avoid conflicts before they start.</p>
+                </div>
+
+                <div class="feature">
+                    <div class="feature-icon">
+                        <i class="fas fa-folder"></i>
+                    </div>
+                    <h3>Document Storage</h3>
+                    <p>Keep wills, deeds, photos, and important papers organized and accessible in one secure place.</p>
+                </div>
+
+                <div class="feature">
+                    <div class="feature-icon">
+                        <i class="fas fa-history"></i>
+                    </div>
+                    <h3>Activity Tracking</h3>
+                    <p>See what's been done, who claimed what, and maintain a clear record throughout the process.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Trust Section -->
+    <section class="trust">
+        <div class="container">
+            <div class="trust-content">
+                <h2>Your Privacy Matters</h2>
+
+                <div class="trust-points">
+                    <div class="trust-point">
+                        <i class="fas fa-shield-alt"></i>
+                        <h3>No Data Selling</h3>
+                        <p>Your information stays yours. We never sell your data to third parties. Period.</p>
+                    </div>
+
+                    <div class="trust-point">
+                        <i class="fas fa-robot"></i>
+                        <h3>AI for Good</h3>
+                        <p>We only use AI to help identify items and estimate values—nothing more, nothing less.</p>
+                    </div>
+
+                    <div class="trust-point">
+                        <i class="fas fa-tag-off"></i>
+                        <h3>No Upselling</h3>
+                        <p>We won't push unnecessary products or bombard you with ads. Just straightforward tools that work.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <div class="container">
+            <h2>Start Organizing Today</h2>
+            <p>Whether you're closing an estate or downsizing, MyEstateAlly is here to help ease the burden.</p>
+            <a href="javascript:app.openAuthModal()" class="btn btn-white btn-large">
+                Get Started Free <i class="fas fa-arrow-right"></i>
+            </a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2026 MyEstateAlly. All rights reserved.</p>
+            <p>Created with empathy for those navigating life's difficult transitions.</p>
+        </div>
+    </footer>
+
+    <!-- Progressive Authentication Modal -->
+    <div id="auth-modal" class="modal">
+        <div class="modal-content auth-modal-content">
+            <div class="modal-header">
+                <h3 id="auth-modal-title"><i class="fas fa-sign-in-alt"></i> Welcome to MyEstateAlly</h3>
+                <button class="modal-close" onclick="window.app && window.app.closeModal('auth-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Step 1: Email Entry -->
+                <div id="auth-step-email" class="auth-step active">
+                    <div class="auth-step-content">
+                        <div class="auth-icon">
+                            <i class="fas fa-envelope fa-3x"></i>
+                        </div>
+                        <h4>Sign in or create account</h4>
+                        <p class="auth-subtitle">Enter your email to get started</p>
+
+                        <form id="email-check-form">
+                            <div class="form-group">
+                                <label for="auth-email">Email Address</label>
+                                <input type="email" id="auth-email" required placeholder="you@example.com" autofocus>
+                            </div>
+                            <button type="submit" class="btn primary full-width">
+                                <i class="fas fa-arrow-right"></i> Continue
+                            </button>
+                        </form>
+
+                        <div class="auth-divider">
+                            <span>or continue with</span>
+                        </div>
+
+                        <div class="oauth-buttons">
+                            <button class="btn google-btn" onclick="app.loginWithGoogle()">
+                                <i class="fab fa-google"></i> Google
+                            </button>
+                            <button class="btn facebook-btn" onclick="app.loginWithFacebook()">
+                                <i class="fab fa-facebook-f"></i> Facebook
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2A: Password Entry (Existing User) -->
+                <div id="auth-step-password" class="auth-step">
+                    <div class="auth-step-content">
+                        <button class="back-btn" onclick="app.authGoBack()">
+                            <i class="fas fa-arrow-left"></i> Back
+                        </button>
+                        <div class="auth-icon">
+                            <i class="fas fa-lock fa-3x"></i>
+                        </div>
+                        <h4>Welcome back!</h4>
+                        <p class="auth-subtitle">
+                            <span id="auth-user-email"></span>
+                        </p>
+
+                        <form id="password-form">
+                            <div class="form-group">
+                                <label for="auth-password">Password</label>
+                                <input type="password" id="auth-password" required placeholder="Enter your password" autofocus>
+                            </div>
+                            <div class="form-group checkbox-group">
+                                <input type="checkbox" id="remember-me">
+                                <label for="remember-me">Remember me</label>
+                            </div>
+                            <button type="submit" class="btn primary full-width">
+                                <i class="fas fa-sign-in-alt"></i> Sign In
+                            </button>
+                        </form>
+
+                        <div class="auth-footer">
+                            <button class="btn-link" onclick="app.showForgotPassword()">
+                                Forgot password?
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2B: Sign Up (New User) -->
+                <div id="auth-step-signup" class="auth-step">
+                    <div class="auth-step-content">
+                        <button class="back-btn" onclick="app.authGoBack()">
+                            <i class="fas fa-arrow-left"></i> Back
+                        </button>
+                        <div class="auth-icon">
+                            <i class="fas fa-user-plus fa-3x"></i>
+                        </div>
+                        <h4>Create your account</h4>
+                        <p class="auth-subtitle">
+                            <span id="auth-signup-email"></span>
+                        </p>
+
+                        <form id="signup-password-form">
+                            <div class="form-group">
+                                <label for="signup-name">Full Name</label>
+                                <input type="text" id="signup-name" required placeholder="Your name" autofocus>
+                            </div>
+                            <div class="form-group">
+                                <label for="signup-password">Password</label>
+                                <input type="password" id="signup-password" required placeholder="Create a password (min 8 characters)" minlength="8">
+                                <small class="password-hint">Use at least 8 characters with a mix of letters and numbers</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="signup-password-confirm">Confirm Password</label>
+                                <input type="password" id="signup-password-confirm" required placeholder="Confirm your password">
+                            </div>
+                            <div class="form-group">
+                                <label for="signup-beta-code">Beta Code (Optional)</label>
+                                <input type="text" id="signup-beta-code" placeholder="Enter beta code for free access" style="text-transform: uppercase;">
+                                <small class="password-hint">Enter ESTATEALLY2026 for free beta access</small>
+                            </div>
+                            <div class="form-group checkbox-group">
+                                <input type="checkbox" id="enable-mfa" checked>
+                                <label for="enable-mfa">Enable two-factor authentication (recommended)</label>
+                            </div>
+                            <button type="submit" class="btn primary full-width">
+                                <i class="fas fa-user-plus"></i> Create Account
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Step 3: MFA Verification -->
+                <div id="auth-step-mfa" class="auth-step">
+                    <div class="auth-step-content">
+                        <div class="auth-icon">
+                            <i class="fas fa-mobile-alt fa-3x"></i>
+                        </div>
+                        <h4>Two-Factor Authentication</h4>
+                        <p class="auth-subtitle">Enter the 6-digit code from your authenticator app</p>
+
+                        <form id="mfa-form">
+                            <div class="form-group">
+                                <div class="mfa-code-input">
+                                    <input type="text" maxlength="1" class="mfa-digit" data-index="0">
+                                    <input type="text" maxlength="1" class="mfa-digit" data-index="1">
+                                    <input type="text" maxlength="1" class="mfa-digit" data-index="2">
+                                    <input type="text" maxlength="1" class="mfa-digit" data-index="3">
+                                    <input type="text" maxlength="1" class="mfa-digit" data-index="4">
+                                    <input type="text" maxlength="1" class="mfa-digit" data-index="5">
+                                </div>
+                            </div>
+                            <div class="form-group checkbox-group">
+                                <input type="checkbox" id="trust-device">
+                                <label for="trust-device">Trust this device for 30 days</label>
+                            </div>
+                            <button type="submit" class="btn primary full-width">
+                                <i class="fas fa-check"></i> Verify Code
+                            </button>
+                        </form>
+
+                        <div class="auth-footer">
+                            <button class="btn-link" onclick="app.resendMfaCode()">
+                                Didn't receive a code? Resend
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 4: MFA Setup (For New Users) -->
+                <div id="auth-step-mfa-setup" class="auth-step">
+                    <div class="auth-step-content">
+                        <div class="auth-icon">
+                            <i class="fas fa-qrcode fa-3x"></i>
+                        </div>
+                        <h4>Set Up Two-Factor Authentication</h4>
+                        <p class="auth-subtitle">Scan this QR code with your authenticator app</p>
+
+                        <div class="mfa-setup-container">
+                            <div id="mfa-qr-code" class="mfa-qr-code">
+                                <!-- QR code will be inserted here -->
+                            </div>
+                            <div class="mfa-manual-code">
+                                <p><strong>Can't scan?</strong> Enter this code manually:</p>
+                                <code id="mfa-secret-code">XXXX XXXX XXXX XXXX</code>
+                            </div>
+                        </div>
+
+                        <form id="mfa-setup-verify-form">
+                            <div class="form-group">
+                                <label>Enter the 6-digit code from your app to verify</label>
+                                <div class="mfa-code-input">
+                                    <input type="text" maxlength="1" class="mfa-digit" data-index="0">
+                                    <input type="text" maxlength="1" class="mfa-digit" data-index="1">
+                                    <input type="text" maxlength="1" class="mfa-digit" data-index="2">
+                                    <input type="text" maxlength="1" class="mfa-digit" data-index="3">
+                                    <input type="text" maxlength="1" class="mfa-digit" data-index="4">
+                                    <input type="text" maxlength="1" class="mfa-digit" data-index="5">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn primary full-width">
+                                <i class="fas fa-check"></i> Complete Setup
+                            </button>
+                        </form>
+
+                        <div class="auth-footer">
+                            <button class="btn-link" onclick="app.skipMfaSetup()">
+                                Skip for now (not recommended)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App Script (for auth functionality) -->
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+
+    <script>
+        // app is initialized by script.js's DOMContentLoaded handler (window.app),
+        // which includes the landing page check to prevent auto-opening the modal.
+        // Close modal when clicking outside the modal content
+        document.addEventListener('click', function(event) {
+            const modal = document.getElementById('auth-modal');
+            if (event.target === modal && window.app) {
+                window.app.closeModal('auth-modal');
+            }
+        });
+    </script>
+</body>
+</html>
