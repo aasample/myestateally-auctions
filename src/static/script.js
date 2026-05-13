@@ -40,10 +40,14 @@ class MyEstateAllyApp {
     async init() {
         console.log('MyEstateAlly app initializing...');
 
-        // Hard-close every modal on startup — guards against a stale cached
-        // stylesheet that has display:flex (or display:flex !important) on a
-        // modal class, which would override the inline style="display:none".
-        document.querySelectorAll('.modal').forEach(m => { m.style.display = 'none'; });
+        // Hard-close every modal on startup. Use visibility+pointerEvents in
+        // addition to display so an old cached CSS "display:flex !important"
+        // can't keep a modal visible — visibility:hidden always wins visually.
+        document.querySelectorAll('.modal').forEach(m => {
+            m.style.display = 'none';
+            m.style.visibility = 'hidden';
+            m.style.pointerEvents = 'none';
+        });
 
         // Wait for auth check to complete BEFORE loading dashboard data
         const isAuthenticated = await this.checkAuthStatus();
@@ -1331,12 +1335,22 @@ class MyEstateAllyApp {
         const inp = document.getElementById('bulk-file-input');
         if (inp) inp.value = '';
         const modal = document.getElementById('bulk-photo-modal');
-        if (modal) modal.style.display = 'flex';
+        if (modal) {
+            modal.style.display = 'flex';
+            modal.style.visibility = 'visible';
+            modal.style.pointerEvents = 'auto';
+        }
     }
 
     closeBulkPhotoModal() {
         const modal = document.getElementById('bulk-photo-modal');
-        if (modal) modal.style.display = 'none';
+        if (modal) {
+            modal.style.display = 'none';
+            // visibility+pointerEvents defeat old cached CSS "display:flex !important"
+            // which would otherwise override the inline display:none
+            modal.style.visibility = 'hidden';
+            modal.style.pointerEvents = 'none';
+        }
         this.bulkPhotos  = [];
         this.bulkResults = [];
         // reload inventory in case some were saved before close
