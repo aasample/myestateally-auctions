@@ -6405,6 +6405,22 @@ h1, h2, h3,
     transform: translateY(-1px);
 }
 
+/* All secondary buttons in the main app (not landing page) adapt to dark navy bg.
+   The glamour theme is always applied regardless of OS dark-mode preference,
+   so we must explicitly fix secondary buttons here — they default to #f0f9ff
+   (near-white) which is invisible against the dark background. */
+body:not(.landing-page) .btn.secondary {
+    background: rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    color: #ffffff !important;
+}
+body:not(.landing-page) .btn.secondary:hover {
+    background: rgba(255, 255, 255, 0.18);
+    border-color: rgba(255, 255, 255, 0.48);
+    color: #ffffff !important;
+    transform: translateY(-1px);
+}
+
 /* --- 4. Navigation: dark gradient, gold active underline ------- */
 .nav {
     background: linear-gradient(180deg, var(--navy-mid) 0%, var(--navy-light) 100%);
