@@ -2671,6 +2671,8 @@ class MyEstateAllyApp {
             }
 
             modal.style.display = 'flex';
+            modal.style.visibility = 'visible';
+            modal.style.pointerEvents = 'auto';
             document.body.style.overflow = 'hidden';
         }
     }
@@ -2682,6 +2684,8 @@ class MyEstateAllyApp {
         const modal = document.getElementById(modalId);
         if (modal) {
             modal.style.display = 'none';
+            modal.style.visibility = 'hidden';
+            modal.style.pointerEvents = 'none';
             document.body.style.overflow = '';
         }
         if (modalId === 'add-item-modal') {
@@ -4128,7 +4132,9 @@ function openModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
         modal.style.display = 'flex';
-        
+        modal.style.visibility = 'visible';
+        modal.style.pointerEvents = 'auto';
+
         // Reset auth flow to email step when opening auth modal
         if (modalId === 'auth-modal') {
             showAuthStep('email');
