@@ -94,11 +94,11 @@ Pattern: `value = os.environ.get('KEY_NAME') or get_secret('KEY_NAME')`
 `sw.js` caches `styles.css` and `script.js`. Browser "Clear Cache" does NOT clear the SW cache.
 **Every time you change `styles.css` or `script.js`, bump all three version strings in `sw.js`:**
 ```javascript
-const CACHE_NAME = 'myestateally-v1.0.7';        // ← increment
-const STATIC_CACHE = 'myestateally-static-v1.0.7';
-const DYNAMIC_CACHE = 'myestateally-dynamic-v1.0.7';
+const CACHE_NAME = 'myestateally-v1.0.8';        // ← increment
+const STATIC_CACHE = 'myestateally-static-v1.0.8';
+const DYNAMIC_CACHE = 'myestateally-dynamic-v1.0.8';
 ```
-Current version: **v1.0.7**
+Current version: **v1.0.8**
 The SW calls `skipWaiting()` on install so the new version activates immediately.
 
 ---
