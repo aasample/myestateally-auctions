@@ -109,7 +109,7 @@ const CACHE_NAME = 'myestateally-v1.0.8';        // ← increment
 const STATIC_CACHE = 'myestateally-static-v1.0.8';
 const DYNAMIC_CACHE = 'myestateally-dynamic-v1.0.8';
 ```
-Current version: **v1.1.1**
+Current version: **v1.1.2**
 The SW calls `skipWaiting()` on install so the new version activates immediately.
 
 ---
@@ -211,6 +211,20 @@ The SW calls `skipWaiting()` on install so the new version activates immediately
 - Removed `GEMINI_API_KEY` from `app.yaml` → Secret Manager only
 - Rotated all exposed credentials (OpenAI, Gemini, Google OAuth)
 - First successful push to GitHub; Google Cloud deployment pipeline confirmed
+
+### Phase 8 — Glamour Dark Mode Polish (May 2026)
+- **Discovered**: GitHub push does NOT auto-deploy — must run `gcloud app deploy app.yaml --quiet` manually every time
+- **Fixed bulk modal** (continued): bumped SW v1.0.8; `init()` now sets `visibility:hidden + pointerEvents:none` on all modals so old cached CSS `display:flex !important` cannot keep modal open; `openModal()` and `closeModal()` updated to reset all three properties (display + visibility + pointerEvents)
+- **Fixed login button broken**: `openModal()` was not resetting `visibility:hidden` set by `init()`, so auth modal was invisible when Login clicked; SW v1.0.9
+- **Fixed secondary buttons invisible on dark navy**: glamour theme applies regardless of OS dark-mode preference; added `body:not(.landing-page) .btn.secondary` to glamour section with translucent-white style; SW v1.1.0
+- **Fixed auth modal header invisible**: `.modal-header` now gets explicit dark navy gradient background + white `!important` text + gold icon tint in glamour theme — works in all OS light/dark modes; `closeModal()` and `openModal()` also reset `visibility`/`pointerEvents`; SW v1.1.1
+- **Fixed inventory filter selects going white on hover**: `--bg-accent` was `#eff6ff` (near-white), not redefined for dark mode → white text on white bg on hover; added glamour-scoped overrides for all `.inventory-filters select/input` with translucent-white bg, gold border on hover/focus, dark navy option backgrounds; SW v1.1.2
+
+#### Key CSS Lessons (Phase 8)
+- The glamour theme is **always active** (plain CSS, not inside a media query). Dark navy look comes from glamour, NOT from `prefers-color-scheme:dark`. Any element that needs to look good on dark navy must have explicit colour rules in the glamour section or be scoped with `body:not(.landing-page)`.
+- `body:not(.landing-page)` is the correct scope for app-wide glamour overrides that must not bleed into the landing page.
+- `--bg-accent` (#eff6ff) and `--secondary-color` (#f0f9ff) are light-mode values that are NOT redefined in the dark mode `:root` block — never use them for backgrounds in the glamour context.
+- All `openModal()` / `closeModal()` calls (both class method and global function) must set `display` + `visibility` + `pointerEvents` together.
 
 ---
 

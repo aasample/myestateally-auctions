@@ -6587,6 +6587,44 @@ body:not(.landing-page) .btn.secondary:hover {
     color: #4b5563 !important;
 }
 
+/* --- 8b. Inventory filter selects & inputs on dark navy background ----------
+   On hover, the base CSS uses --bg-accent (#eff6ff near-white) but the text
+   is white (glamour/dark-mode). Fix: translucent-white bg + gold border on hover,
+   dark navy bg on option elements so dropdown list is always readable. ---------- */
+body:not(.landing-page) .inventory-filters select,
+body:not(.landing-page) .inventory-filters input[type="number"],
+body:not(.landing-page) .inventory-filters input[type="text"],
+body:not(.landing-page) .inventory-filters input[type="search"] {
+    background: rgba(255, 255, 255, 0.10);
+    border-color: rgba(255, 255, 255, 0.28);
+    color: #ffffff;
+}
+body:not(.landing-page) .inventory-filters select:hover,
+body:not(.landing-page) .inventory-filters input[type="number"]:hover,
+body:not(.landing-page) .inventory-filters input[type="text"]:hover,
+body:not(.landing-page) .inventory-filters input[type="search"]:hover {
+    background: rgba(255, 255, 255, 0.18);
+    border-color: var(--gold);
+    color: #ffffff;
+}
+body:not(.landing-page) .inventory-filters select:focus,
+body:not(.landing-page) .inventory-filters input:focus {
+    background: rgba(255, 255, 255, 0.18);
+    border-color: var(--gold);
+    color: #ffffff;
+    box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.25);
+    outline: none;
+}
+/* Dropdown option list — dark so white text is readable */
+body:not(.landing-page) .inventory-filters select option {
+    background: #142238;   /* --navy-mid */
+    color: #ffffff;
+}
+/* Placeholder text */
+body:not(.landing-page) .inventory-filters input::placeholder {
+    color: rgba(255, 255, 255, 0.50);
+}
+
 /* --- 8. Inventory cards: gold value + hover glow --------------- */
 .inventory-item {
     border-radius: var(--radius-lg);
