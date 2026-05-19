@@ -9,7 +9,10 @@ Built and owned by Alicia Baker-Sample (aasample@gmail.com).
 ---
 
 ## Deployment Pipeline
-**Local worktree → git commit + push → GitHub → Google Cloud App Engine (auto-deploy)**
+**Local worktree → git commit + push → GitHub → then MANUALLY run `gcloud app deploy`**
+
+⚠️ **There is NO auto-deploy from GitHub.** Pushing to GitHub only updates the repo.
+You MUST run `gcloud app deploy app.yaml --quiet` from the worktree directory to go live.
 
 - Worktree path: `C:\Users\aasam\.claude-worktrees\myestateally-complete\zen-lovelace`
 - Branch: `zen-lovelace`
@@ -17,8 +20,16 @@ Built and owned by Alicia Baker-Sample (aasample@gmail.com).
 - Live site: `https://www.myestateally.com`
 - Google Cloud project: `estateally-ai-services`
 - Runtime: Python 3.11, App Engine Standard, instance class F2
+- gcloud project already configured: `estateally-ai-services`
 
-**Always commit AND push after making changes — file edits alone do not deploy.**
+**Full deploy sequence after any code change:**
+```
+git add <files>
+git commit -m "message"
+git push origin zen-lovelace
+gcloud app deploy app.yaml --quiet   ← THIS is what actually goes live
+```
+
 Never commit `.env` (gitignored). All secrets live exclusively in Google Cloud Secret Manager.
 
 ---
