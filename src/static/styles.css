@@ -6393,6 +6393,38 @@ h1, h2, h3,
 .user-avatar {
     border: 2px solid rgba(201, 168, 76, 0.5);
 }
+
+/* Gold initials avatar — replaces the generic user-circle icon */
+.user-initials-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+    color: var(--navy);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 2px rgba(201, 168, 76, 0.35), 0 2px 6px rgba(0,0,0,0.3);
+    user-select: none;
+}
+/* First-name label next to avatar */
+.user-first-name {
+    color: rgba(255, 255, 255, 0.88);
+    font-size: 0.875rem;
+    font-weight: 500;
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* On very small screens hide the first name — avatar alone is enough */
+@media (max-width: 480px) {
+    .user-first-name { display: none; }
+}
 /* Header secondary buttons (logout etc.) adapt to dark bg */
 .header-actions .btn.secondary {
     background: rgba(255, 255, 255, 0.1);

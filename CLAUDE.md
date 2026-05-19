@@ -109,7 +109,7 @@ const CACHE_NAME = 'myestateally-v1.0.8';        // ← increment
 const STATIC_CACHE = 'myestateally-static-v1.0.8';
 const DYNAMIC_CACHE = 'myestateally-dynamic-v1.0.8';
 ```
-Current version: **v1.1.2**
+Current version: **v1.1.3**
 The SW calls `skipWaiting()` on install so the new version activates immediately.
 
 ---

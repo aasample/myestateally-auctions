@@ -3106,16 +3106,32 @@ class MyEstateAllyApp {
             if (estateSelector) estateSelector.style.display = 'flex';
             if (authButtons) authButtons.style.display = 'none';
 
-            // Update user name
-            const userName = document.getElementById('user-name');
-            if (userName && this.currentUser) {
-                userName.textContent = this.currentUser.name;
-            }
+            // Update user name — show first name only + gold initials avatar
+            this._updateUserDisplay(this.currentUser);
         } else {
             if (userMenu) userMenu.style.display = 'none';
             if (estateSelector) estateSelector.style.display = 'none';
             if (authButtons) authButtons.style.display = 'flex';
         }
+    }
+
+    /**
+     * Update header user display — initials avatar + first name only.
+     * Keeps full name in the DOM for profile modal but shows compact form in header.
+     */
+    _updateUserDisplay(user) {
+        if (!user || !user.name) return;
+        const parts = user.name.trim().split(/\s+/);
+        const firstName = parts[0];
+        // Build initials: first letter of first name + first letter of last word (if exists)
+        const initials = (parts.length > 1)
+            ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+            : parts[0].slice(0, 2).toUpperCase();
+
+        const avatar = document.getElementById('user-initials-avatar');
+        const nameEl = document.getElementById('user-name');
+        if (avatar) avatar.textContent = initials;
+        if (nameEl) nameEl.textContent = firstName;
     }
 
     /**
@@ -3158,14 +3174,17 @@ class MyEstateAllyApp {
             });
         }
 
-        // Update mobile estate indicator
+        // Update mobile estate indicator text and let CSS media query control visibility.
+        // Do NOT set display:flex inline — that would override the media query and show
+        // the indicator on desktop too, duplicating the estate name from the centre selector.
         const mobileEstateIndicator = document.getElementById('mobile-estate-indicator');
         const estateNameMobile = document.getElementById('estate-name-mobile');
         if (mobileEstateIndicator && estateNameMobile && currentEstateId) {
             const currentEstate = estates.find(e => e.id === currentEstateId);
             if (currentEstate) {
                 estateNameMobile.textContent = currentEstate.name;
-                mobileEstateIndicator.style.display = 'flex';
+                // Clear the initial inline display:none so the CSS media query takes over
+                mobileEstateIndicator.style.removeProperty('display');
             }
         }
     }
@@ -4743,10 +4762,7 @@ MyEstateAllyApp.prototype.saveUserProfile = async function(event) {
                 this.currentUser.name = data.user.name;
             }
 
-            const userName = document.getElementById('user-name');
-            if (userName) {
-                userName.textContent = data.user.name;
-            }
+            this._updateUserDisplay(data.user);
 
             this.showMessage('Profile updated successfully!', 'success');
             this.closeModal('user-profile-modal');
