@@ -6551,6 +6551,42 @@ body:not(.landing-page) .btn.secondary:hover {
     font-family: var(--font-serif);
 }
 
+/* --- 8a. Modal headers: dark navy, gold accent, always-visible white text -- */
+/* Explicit colours so title is visible regardless of OS dark/light preference */
+.modal-header {
+    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-mid) 100%);
+    border-bottom: 1px solid rgba(201, 168, 76, 0.30);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.modal-header h2,
+.modal-header h3 {
+    color: #ffffff !important;
+    font-family: var(--font-serif);
+}
+.modal-header h2 i,
+.modal-header h3 i {
+    color: var(--gold) !important;
+}
+.modal-close {
+    color: rgba(255, 255, 255, 0.65) !important;
+}
+.modal-close:hover {
+    background: rgba(255, 255, 255, 0.10) !important;
+    color: #ffffff !important;
+}
+
+/* Auth modal body — ensure text is readable on white card */
+.auth-step-content h4 {
+    color: var(--navy) !important;
+    font-family: var(--font-serif);
+}
+.auth-icon i {
+    color: var(--gold) !important;
+}
+.auth-subtitle {
+    color: #4b5563 !important;
+}
+
 /* --- 8. Inventory cards: gold value + hover glow --------------- */
 .inventory-item {
     border-radius: var(--radius-lg);
