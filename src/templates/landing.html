@@ -3,8 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyEstateAlly - When Loss Meets Logistics, We're Here to Help</title>
-    <meta name="description" content="Born from personal experience with estate management during grief. A simple, honest place to organize belongings, documents, and memories - whether closing an estate or downsizing.">
+    <title>MyEstateAlly | Estate Inventory &amp; Management Software | Downsizing Help</title>
+    <meta name="description" content="Simplify estate management and downsizing with AI-powered inventory, family sharing, and document storage. Free to start. Built for real families navigating loss and life transitions.">
+
+    <!-- Canonical -->
+    <link rel="canonical" href="https://www.myestateally.com">
+
+    <!-- Open Graph — controls how links look on Facebook, LinkedIn, iMessage -->
+    <meta property="og:type"        content="website">
+    <meta property="og:url"         content="https://www.myestateally.com">
+    <meta property="og:title"       content="MyEstateAlly | Estate Management Made Simple">
+    <meta property="og:description" content="AI-powered estate inventory, family sharing &amp; document storage. Built by someone who learned the hard way. Free to start — no credit card required.">
+    <meta property="og:image"       content="https://www.myestateally.com/static/og-image.png">
+    <meta property="og:site_name"   content="MyEstateAlly">
+
+    <!-- Twitter / X Card -->
+    <meta name="twitter:card"        content="summary_large_image">
+    <meta name="twitter:title"       content="MyEstateAlly | Estate Management Made Simple">
+    <meta name="twitter:description" content="Organize estate items, share with family, store documents. AI-powered and completely private. Free to start.">
+    <meta name="twitter:image"       content="https://www.myestateally.com/static/og-image.png">
+
+    <!-- Schema.org — enables Google rich results -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "MyEstateAlly",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web, iOS, Android",
+      "description": "AI-powered estate management software for families navigating estate settlement, downsizing, probate inventory, and family inheritance decisions.",
+      "url": "https://www.myestateally.com",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "creator": { "@type": "Organization", "name": "MyEstateAlly" },
+      "featureList": ["AI item identification", "Photo inventory", "Family sharing", "Document storage", "Estate settlement tracking", "AI pricing estimates"]
+    }
+    </script>
 
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -354,6 +387,66 @@
             opacity: 0.8;
         }
 
+        /* CTA Fine Print */
+        .cta-fine-print {
+            margin-top: 0.85rem;
+            font-size: 0.825rem;
+            color: var(--text-light);
+            letter-spacing: 0.01em;
+        }
+
+        /* Trust Bar — thin social-proof strip below hero */
+        .trust-bar {
+            background: #f1f5f9;
+            border-top: 1px solid #e2e8f0;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 0.875rem 0;
+        }
+
+        .trust-bar-items {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem 2rem;
+        }
+
+        .trust-bar-items span {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.8125rem;
+            font-weight: 600;
+            color: var(--text-medium);
+            white-space: nowrap;
+        }
+
+        .trust-bar-items span i {
+            color: var(--primary-color);
+            font-size: 0.75rem;
+        }
+
+        /* Footer Links */
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 1.5rem;
+            margin-top: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .footer-links a {
+            color: rgba(255, 255, 255, 0.65);
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: color 0.2s;
+        }
+
+        .footer-links a:hover {
+            color: rgba(255, 255, 255, 0.95);
+            text-decoration: underline;
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             .hero h1 {
@@ -552,9 +645,22 @@
             body.landing-page .trust-point h3 { color: #1f2937 !important; }
             body.landing-page .trust-point p  { color: #4b5563 !important; }
 
+            /* ── Trust bar ── */
+            body.landing-page .trust-bar {
+                background: #e8edf2 !important;
+                border-color: #d1d9e0 !important;
+            }
+            body.landing-page .trust-bar-items span { color: #374151 !important; }
+            body.landing-page .trust-bar-items span i { color: #2563eb !important; }
+
+            /* ── CTA fine print ── */
+            body.landing-page .cta-fine-print { color: #4b5563 !important; }
+
             /* ── Footer ── */
             body.landing-page .footer        { background: #1f2937 !important; }
             body.landing-page .footer p      { color: rgba(255,255,255,0.85) !important; }
+            body.landing-page .footer-links a { color: rgba(255,255,255,0.65) !important; }
+            body.landing-page .footer-links a:hover { color: rgba(255,255,255,0.95) !important; }
         }
     </style>
 </head>
@@ -582,21 +688,33 @@
     <!-- Hero Section -->
     <section class="hero">
         <div class="container">
-            <h1>Organize Life's Hardest Transitions</h1>
-            <p class="subtitle">Estate management and downsizing made simple—<br>created by someone who learned the hard way</p>
+            <h1>Estate Management &amp; Downsizing, Made Simple</h1>
+            <p class="subtitle">AI-powered inventory, family sharing, and document storage—<br>created by someone who learned the hard way</p>
             <div class="cta">
                 <a href="javascript:app.openAuthModal()" class="btn btn-primary btn-large">
                     Start Organizing Free <i class="fas fa-arrow-right"></i>
                 </a>
-                <p style="margin-top: 1rem; font-size: 1.1rem; color: var(--text-medium);">
+                <p class="cta-fine-print">No credit card &nbsp;·&nbsp; No upsell &nbsp;·&nbsp; Your data stays yours</p>
+                <p style="margin-top: 0.75rem; font-size: 1.1rem; color: var(--text-medium);">
                     Already have an account?
-                    <a href="javascript:app.openAuthModal()" style="color: var(--text-dark); font-weight: 700; text-decoration: underline;">
-                        Log In
-                    </a>
+                    <a href="javascript:app.openAuthModal()" style="color: var(--text-dark); font-weight: 700; text-decoration: underline;">Log In</a>
                 </p>
             </div>
         </div>
     </section>
+
+    <!-- Trust Bar -->
+    <div class="trust-bar">
+        <div class="container">
+            <div class="trust-bar-items">
+                <span><i class="fas fa-lock"></i> 100% Private</span>
+                <span><i class="fas fa-robot"></i> AI-Powered</span>
+                <span><i class="fas fa-clock"></i> Saves 200+ Hours</span>
+                <span><i class="fas fa-star"></i> Free to Start</span>
+                <span><i class="fas fa-ban"></i> We Never Sell Your Data</span>
+            </div>
+        </div>
+    </div>
 
     <!-- Story Section -->
     <section class="story">
@@ -683,32 +801,32 @@
                     <div class="feature-icon">
                         <i class="fas fa-camera"></i>
                     </div>
-                    <h3>Photo Inventory</h3>
-                    <p>Take pictures, and our AI helps identify items and estimate values—no manual data entry required.</p>
+                    <h3>Photograph → AI Does the Rest</h3>
+                    <p>Snap a photo and our AI identifies the item, suggests a value, and writes a description. No spreadsheets. No guesswork.</p>
                 </div>
 
                 <div class="feature">
                     <div class="feature-icon">
                         <i class="fas fa-users"></i>
                     </div>
-                    <h3>Family Sharing</h3>
-                    <p>Invite family members, let them claim items that matter to them, and avoid conflicts before they start.</p>
+                    <h3>Share with Family, Skip the Arguments</h3>
+                    <p>Invite family members to view items, mark what matters to them, and communicate — before tensions rise.</p>
                 </div>
 
                 <div class="feature">
                     <div class="feature-icon">
                         <i class="fas fa-folder"></i>
                     </div>
-                    <h3>Document Storage</h3>
-                    <p>Keep wills, deeds, photos, and important papers organized and accessible in one secure place.</p>
+                    <h3>Every Document, One Safe Place</h3>
+                    <p>Wills, deeds, insurance policies, financial accounts — uploaded once, organized forever, accessible when you need them most.</p>
                 </div>
 
                 <div class="feature">
                     <div class="feature-icon">
                         <i class="fas fa-history"></i>
                     </div>
-                    <h3>Activity Tracking</h3>
-                    <p>See what's been done, who claimed what, and maintain a clear record throughout the process.</p>
+                    <h3>Clear Record, No Disputes</h3>
+                    <p>Every action is timestamped. Know exactly what happened, who decided what, and when — giving everyone peace of mind.</p>
                 </div>
             </div>
         </div>
@@ -759,6 +877,11 @@
         <div class="container">
             <p>&copy; 2026 MyEstateAlly. All rights reserved.</p>
             <p>Created with empathy for those navigating life's difficult transitions.</p>
+            <nav class="footer-links" aria-label="Footer navigation">
+                <a href="/privacy">Privacy Policy</a>
+                <a href="/terms">Terms of Service</a>
+                <a href="mailto:support@myestateally.com">Contact Us</a>
+            </nav>
         </div>
     </footer>
 

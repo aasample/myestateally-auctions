@@ -177,10 +177,79 @@
         <div class="container">
             <!-- Dashboard Section -->
             <section id="dashboard" class="section active">
-                <!-- Welcome Card -->
-                <div class="welcome-card">
-                    <h1>Welcome to MyEstateAlly!</h1>
-                    <p>Honoring a legacy, simplified. MyEstateAlly helps you organize, value, and find new homes for the things that matter most.</p>
+
+                <!-- Personalized Welcome Card -->
+                <div class="welcome-card welcome-card--dynamic">
+                    <div class="welcome-card__text">
+                        <h1 id="dashboard-greeting">Welcome back!</h1>
+                        <p id="dashboard-subtitle">Loading your estate…</p>
+                    </div>
+                    <button class="btn primary" onclick="app.openModal('add-item-modal')">
+                        <i class="fas fa-plus"></i> Add Item
+                    </button>
+                </div>
+
+                <!-- Stats (up top — immediately useful) -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-boxes"></i></div>
+                        <div class="stat-content">
+                            <h3 id="total-items">0</h3>
+                            <p>Total Items</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-dollar-sign"></i></div>
+                        <div class="stat-content">
+                            <h3 id="total-value">$0</h3>
+                            <p>Estimated Value</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-tag"></i></div>
+                        <div class="stat-content">
+                            <h3 id="for-sale-items">0</h3>
+                            <p>For Sale</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-heart"></i></div>
+                        <div class="stat-content">
+                            <h3 id="assigned-items">0</h3>
+                            <p>Assigned</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Next Steps Card (shown when items < 5; JS hides when not needed) -->
+                <div class="next-step-card" id="next-step-card">
+                    <h3><i class="fas fa-compass"></i> <span id="next-step-title">Getting Started — 3 easy steps</span></h3>
+                    <ul class="onboarding-list" id="onboarding-list">
+                        <li class="onboarding-item" id="step-add-item">
+                            <i class="fas fa-camera-retro step-icon"></i>
+                            <div class="onboarding-item__text">
+                                <strong>Add your first item</strong>
+                                <span>Snap a photo — AI identifies it and estimates a value in seconds</span>
+                            </div>
+                            <button class="btn primary btn-sm" onclick="app.openModal('add-item-modal')">Add Item</button>
+                        </li>
+                        <li class="onboarding-item" id="step-invite-family">
+                            <i class="fas fa-user-plus step-icon"></i>
+                            <div class="onboarding-item__text">
+                                <strong>Invite a family member</strong>
+                                <span>Share the estate so everyone can see items and mark what matters to them</span>
+                            </div>
+                            <button class="btn secondary btn-sm" onclick="app.showSection('family')">Invite</button>
+                        </li>
+                        <li class="onboarding-item" id="step-upload-doc">
+                            <i class="fas fa-file-upload step-icon"></i>
+                            <div class="onboarding-item__text">
+                                <strong>Upload a key document</strong>
+                                <span>Will, deed, insurance policy — stored safely, findable fast</span>
+                            </div>
+                            <button class="btn secondary btn-sm" onclick="app.showSection('documents')">Upload</button>
+                        </li>
+                    </ul>
                 </div>
 
                 <!-- Quick Actions -->
@@ -206,13 +275,6 @@
                     </div>
                 </div>
 
-                <!-- Mission Statement -->
-                <div class="welcome-card mission-card">
-                    <h2><i class="fas fa-heart"></i> Honoring the Past, Organizing the Future.</h2>
-                    <p>At MyEstateAlly, we believe that every object tells a story. Whether you are helping a loved one downsize or navigating the complex task of settling an estate, the "stuff" can feel like a burden.</p>
-                    <p>Our Mission is to turn that burden into a manageable path forward. By combining compassionate design with AI-powered efficiency, we help you catalog, value, and find the right home for every item—preserving legacies while giving you the space to breathe.</p>
-                </div>
-
                 <!-- Hero Upload Section -->
                 <div class="hero-upload">
                     <div class="hero-content">
@@ -221,7 +283,7 @@
                         </div>
                         <h2>Add Item with AI Analysis</h2>
                         <p>Take a photo and let AI identify your item, estimate its value, and create a description</p>
-                        
+
                         <div class="upload-area" id="hero-upload-area">
                             <div class="upload-placeholder">
                                 <i class="fas fa-cloud-upload-alt"></i>
@@ -230,7 +292,7 @@
                             </div>
                             <input type="file" id="hero-photo-upload" accept="image/*,.heic,.heif" capture="environment" style="display: none;">
                         </div>
-                        
+
                         <div class="hero-actions">
                             <button class="btn primary" id="take-photo-btn">
                                 <i class="fas fa-camera"></i>
@@ -240,57 +302,6 @@
                                 <i class="fas fa-qrcode"></i>
                                 Use Phone Camera
                             </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Instructions -->
-                <div class="instruction-card">
-                    <h3><i class="fas fa-info-circle"></i> How to Use Dashboard</h3>
-                    <ul class="instruction-list">
-                        <li><strong>Photo Upload:</strong> Use the large square above to quickly add items with AI analysis</li>
-                        <li><strong>View Overview:</strong> See your total items, estimated value, and items for sale below</li>
-                        <li><strong>Quick Actions:</strong> Use the buttons below to quickly add items or browse inventory</li>
-                        <li><strong>Navigation:</strong> Use the tabs above to access different features</li>
-                    </ul>
-                </div>
-
-                <!-- Stats -->
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-icon">
-                            <i class="fas fa-boxes"></i>
-                        </div>
-                        <div class="stat-content">
-                            <h3 id="total-items">0</h3>
-                            <p>Total Items</p>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">
-                            <i class="fas fa-dollar-sign"></i>
-                        </div>
-                        <div class="stat-content">
-                            <h3 id="total-value">$0</h3>
-                            <p>Estimated Value</p>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">
-                            <i class="fas fa-tag"></i>
-                        </div>
-                        <div class="stat-content">
-                            <h3 id="for-sale-items">0</h3>
-                            <p>For Sale</p>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">
-                            <i class="fas fa-heart"></i>
-                        </div>
-                        <div class="stat-content">
-                            <h3 id="assigned-items">0</h3>
-                            <p>Assigned</p>
                         </div>
                     </div>
                 </div>

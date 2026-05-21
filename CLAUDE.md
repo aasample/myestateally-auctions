@@ -109,7 +109,7 @@ const CACHE_NAME = 'myestateally-v1.0.8';        // ← increment
 const STATIC_CACHE = 'myestateally-static-v1.0.8';
 const DYNAMIC_CACHE = 'myestateally-dynamic-v1.0.8';
 ```
-Current version: **v1.1.3**
+Current version: **v1.1.4**
 The SW calls `skipWaiting()` on install so the new version activates immediately.
 
 ---
@@ -219,12 +219,26 @@ The SW calls `skipWaiting()` on install so the new version activates immediately
 - **Fixed secondary buttons invisible on dark navy**: glamour theme applies regardless of OS dark-mode preference; added `body:not(.landing-page) .btn.secondary` to glamour section with translucent-white style; SW v1.1.0
 - **Fixed auth modal header invisible**: `.modal-header` now gets explicit dark navy gradient background + white `!important` text + gold icon tint in glamour theme — works in all OS light/dark modes; `closeModal()` and `openModal()` also reset `visibility`/`pointerEvents`; SW v1.1.1
 - **Fixed inventory filter selects going white on hover**: `--bg-accent` was `#eff6ff` (near-white), not redefined for dark mode → white text on white bg on hover; added glamour-scoped overrides for all `.inventory-filters select/input` with translucent-white bg, gold border on hover/focus, dark navy option backgrounds; SW v1.1.2
+- **Estate name shown twice**: `updateEstateSelector()` called `mobileEstateIndicator.style.display = 'flex'` unconditionally; replaced with `style.removeProperty('display')` so CSS media query controls visibility; SW v1.1.3
+- **Gold initials avatar**: replaced full-name `<span>` with `<div class="user-initials-avatar">` + `<span class="user-first-name">`; `_updateUserDisplay()` helper added to `script.js` to compute initials and first name; CSS for avatar in glamour section
 
 #### Key CSS Lessons (Phase 8)
 - The glamour theme is **always active** (plain CSS, not inside a media query). Dark navy look comes from glamour, NOT from `prefers-color-scheme:dark`. Any element that needs to look good on dark navy must have explicit colour rules in the glamour section or be scoped with `body:not(.landing-page)`.
 - `body:not(.landing-page)` is the correct scope for app-wide glamour overrides that must not bleed into the landing page.
 - `--bg-accent` (#eff6ff) and `--secondary-color` (#f0f9ff) are light-mode values that are NOT redefined in the dark mode `:root` block — never use them for backgrounds in the glamour context.
 - All `openModal()` / `closeModal()` calls (both class method and global function) must set `display` + `visibility` + `pointerEvents` together.
+
+### Phase 9 — SEO + Dashboard Rewrite (May 2026)
+- **Landing page SEO overhaul**: title, meta description, canonical, Open Graph, Twitter Card, Schema.org JSON-LD (`SoftwareApplication`)
+- **Hero copy**: H1 → "Estate Management & Downsizing, Made Simple"; added `.cta-fine-print` ("No credit card · No upsell · Your data stays yours")
+- **Trust bar**: social-proof strip below hero (5 trust points: Private, AI-Powered, Saves 200+ Hours, Free, No Data Selling)
+- **Feature copy rewritten as outcomes**: "Photo Inventory" → "Photograph → AI Does the Rest", etc.
+- **Footer links**: added Privacy Policy, Terms of Service, Contact Us links
+- **Dark-mode overrides for landing page**: trust-bar, cta-fine-print, footer-links all scoped under `body.landing-page` for `prefers-color-scheme: dark`
+- **Dashboard restructure**: removed generic mission card and instructions card (patronising for logged-in users); moved stats to top; added personalized welcome card (`#dashboard-greeting`, `#dashboard-subtitle`) with time-of-day greeting + estate name + item count; added onboarding/next-steps card (`#next-step-card`) that auto-hides at ≥5 items
+- **`getTimeGreeting()` + `updateWelcomeCard()`** added to `script.js`; called from `updateStats()` and `updateEstateSelector()` so subtitle refreshes when switching estates
+- **CSS**: `.welcome-card--dynamic`, `.next-step-card`, `.onboarding-list`, `.onboarding-item`, `.onboarding-item__text`, `.btn-sm` added to glamour section in `styles.css`
+- SW bumped to **v1.1.4**
 
 ---
 

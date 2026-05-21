@@ -2319,6 +2319,85 @@ class MyEstateAllyApp {
         document.getElementById('total-value').textContent = `$${totalValue.toLocaleString()}`;
         document.getElementById('for-sale-items').textContent = forSaleItems;
         document.getElementById('assigned-items').textContent = assignedItems;
+
+        // Refresh the personalised welcome card whenever stats update
+        this.updateWelcomeCard();
+    }
+
+    /**
+     * Returns a time-of-day greeting string.
+     */
+    getTimeGreeting() {
+        const hour = new Date().getHours();
+        if (hour < 12) return 'Good morning';
+        if (hour < 17) return 'Good afternoon';
+        return 'Good evening';
+    }
+
+    /**
+     * Populate the personalised dashboard welcome card and onboarding steps.
+     * Called by updateStats() and by updateEstateSelector().
+     */
+    updateWelcomeCard() {
+        if (!this.currentUser) return;
+
+        const greetingEl  = document.getElementById('dashboard-greeting');
+        const subtitleEl  = document.getElementById('dashboard-subtitle');
+        const nextStepCard = document.getElementById('next-step-card');
+
+        // --- Greeting ---
+        const firstName = this.currentUser.name
+            ? this.currentUser.name.trim().split(/\s+/)[0]
+            : 'there';
+        if (greetingEl) greetingEl.textContent = `${this.getTimeGreeting()}, ${firstName}!`;
+
+        // --- Subtitle: estate name + item count ---
+        const estateSelect = document.getElementById('estate-select');
+        const estateName = (estateSelect && estateSelect.selectedIndex >= 0)
+            ? estateSelect.options[estateSelect.selectedIndex].text
+            : null;
+        const totalItems = this.inventory.length;
+
+        if (subtitleEl) {
+            if (estateName && totalItems > 0) {
+                subtitleEl.textContent = `${estateName} · ${totalItems} item${totalItems !== 1 ? 's' : ''} catalogued`;
+            } else if (estateName) {
+                subtitleEl.textContent = `${estateName} · Start adding items to build your inventory`;
+            } else {
+                subtitleEl.textContent = 'Create or select an estate to get started';
+            }
+        }
+
+        // --- Onboarding card: show while < 5 items, hide once they're active ---
+        if (!nextStepCard) return;
+
+        if (totalItems >= 5) {
+            nextStepCard.style.display = 'none';
+            return;
+        }
+        nextStepCard.style.display = '';  // let CSS control visibility
+
+        // Step 1 — Add item
+        const stepAddItem = document.getElementById('step-add-item');
+        if (stepAddItem) {
+            const done = totalItems > 0;
+            stepAddItem.classList.toggle('completed', done);
+            const icon = stepAddItem.querySelector('.step-icon');
+            if (icon) icon.className = done
+                ? 'fas fa-check-circle step-icon'
+                : 'fas fa-camera-retro step-icon';
+        }
+
+        // Step 2 — Invite family
+        const stepInviteFamily = document.getElementById('step-invite-family');
+        if (stepInviteFamily) {
+            const done = !!(this.familyMembers && this.familyMembers.length > 0);
+            stepInviteFamily.classList.toggle('completed', done);
+            const icon = stepInviteFamily.querySelector('.step-icon');
+            if (icon) icon.className = done
+                ? 'fas fa-check-circle step-icon'
+                : 'fas fa-user-plus step-icon';
+        }
     }
 
     /**
@@ -3187,6 +3266,9 @@ class MyEstateAllyApp {
                 mobileEstateIndicator.style.removeProperty('display');
             }
         }
+
+        // Refresh the welcome card subtitle now that we know the estate name
+        this.updateWelcomeCard();
     }
 
     /**
