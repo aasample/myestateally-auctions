@@ -951,6 +951,16 @@ def index():
         logger.info("User not authenticated, showing landing page")
         return render_template('landing.html')
 
+@app.route('/privacy')
+def privacy():
+    """Privacy Policy page"""
+    return render_template('privacy.html')
+
+@app.route('/terms')
+def terms():
+    """Terms of Service page"""
+    return render_template('terms.html')
+
 # Debug endpoint protection - only enable in development
 def is_debug_mode():
     """Check if debug endpoints should be enabled"""
