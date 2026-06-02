@@ -34,10 +34,11 @@ from dotenv import load_dotenv
 from src.utils.image_utils import compress_image_to_base64, compress_image_to_data_url
 from src.utils.validation import validate_password_strength
 from reportlab.lib.pagesizes import letter, A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage, PageBreak, KeepTogether
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
+from reportlab.lib.utils import ImageReader
 import logging
 import time
 from openai import OpenAI
@@ -5748,102 +5749,290 @@ def export_inventory_csv():
 @app.route('/api/export/inventory/pdf', methods=['GET'])
 @require_auth
 def export_inventory_pdf():
-    """Export complete inventory to PDF"""
+    """Export complete inventory to a polished, branded PDF estate report."""
     try:
         estate_id = get_current_estate_id()
         if not estate_id:
             return jsonify({'success': False, 'error': 'No estate selected'}), 400
 
-        # Get inventory items
-        items = firestore_list_inventory_items()
-        if items is None:
-            items = []
-
-        # Filter by estate
-        items = [item for item in items if item.get('estate_id') == estate_id]
+        items = firestore_list_inventory_items() or []
+        items = [i for i in items if i.get('estate_id') == estate_id]
 
         if not items:
-            return jsonify({
-                'success': False,
-                'error': 'No inventory items to export'
-            }), 400
+            return jsonify({'success': False, 'error': 'No inventory items to export'}), 400
 
-        # Create PDF
-        buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18)
+        # Estate name
+        user_id = session.get('user_id', '')
+        estate_name = 'Estate'
+        try:
+            estates = storage_service.list_estates(user_id) or []
+            for e in estates:
+                if e.get('id') == estate_id:
+                    estate_name = e.get('name', 'Estate')
+                    break
+        except Exception:
+            pass
 
-        # Styles
-        styles = getSampleStyleSheet()
-        title_style = ParagraphStyle(
-            'CustomTitle',
-            parent=styles['Heading1'],
-            fontSize=24,
-            textColor=colors.HexColor('#4F46E5'),
-            spaceAfter=30,
-            alignment=1  # Center
-        )
+        user_name = session.get('user_email', 'Estate Owner')
 
-        # Build PDF content
-        story = []
+        pdf_data = _build_inventory_pdf(items, estate_name, user_name)
 
-        # Title
-        story.append(Paragraph("Estate Inventory Report", title_style))
-        story.append(Spacer(1, 0.3*inch))
-
-        # Summary
-        total_value = sum(item.get('estimated_value', 0) for item in items)
-        story.append(Paragraph(f"<b>Total Items:</b> {len(items)}", styles['Normal']))
-        story.append(Paragraph(f"<b>Total Value:</b> ${total_value:,.2f}", styles['Normal']))
-        story.append(Paragraph(f"<b>Generated:</b> {datetime.now().strftime('%B %d, %Y at %I:%M %p')}", styles['Normal']))
-        story.append(Spacer(1, 0.5*inch))
-
-        # Table data
-        table_data = [['Item', 'Category', 'Value', 'Status']]
-
-        for item in items:
-            table_data.append([
-                Paragraph(item.get('name', '')[:40], styles['Normal']),
-                item.get('category', ''),
-                f"${item.get('estimated_value', 0):,.2f}",
-                item.get('status', 'active').title()
-            ])
-
-        # Create table
-        table = Table(table_data, colWidths=[3*inch, 1.5*inch, 1*inch, 1*inch])
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4F46E5')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 12),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-            ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F9FAFB')])
-        ]))
-
-        story.append(table)
-
-        # Build PDF
-        doc.build(story)
-
-        pdf_data = buffer.getvalue()
-        buffer.close()
+        safe_name = ''.join(c if c.isalnum() else '_' for c in estate_name).lower()
+        filename = f"{safe_name}_inventory_{datetime.now().strftime('%Y%m%d')}.pdf"
 
         response = make_response(pdf_data)
         response.headers['Content-Type'] = 'application/pdf'
-        response.headers['Content-Disposition'] = f'attachment; filename=inventory_{datetime.now().strftime("%Y%m%d")}.pdf'
-
+        response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
 
     except Exception as e:
-        logger.error(f"Error exporting PDF: {e}")
-        return jsonify({
-            'success': False,
-            'error': 'Failed to export inventory'
-        }), 500
+        logger.error(f"Error exporting PDF: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': 'Failed to generate PDF report'}), 500
+
+
+def _build_inventory_pdf(items, estate_name, user_name):
+    """
+    Build a professional branded estate inventory PDF.
+    Returns raw bytes of the PDF.
+    """
+    # ── Palette ──────────────────────────────────────────────────────────────
+    NAVY      = colors.HexColor('#0a1628')
+    NAVY_MID  = colors.HexColor('#142238')
+    GOLD      = colors.HexColor('#c9a84c')
+    GOLD_DARK = colors.HexColor('#a0832e')
+    WHITE     = colors.white
+    LIGHT_BG  = colors.HexColor('#f8f7f4')
+    BORDER    = colors.HexColor('#e2d9c5')
+    MUTED     = colors.HexColor('#6b7280')
+    TEXT      = colors.HexColor('#1f2937')
+    TEXT_SUB  = colors.HexColor('#374151')
+
+    PAGE_W = letter[0]
+    CONTENT_W = PAGE_W - 1.2 * inch   # left+right margin = 0.6" each
+    PHOTO_W   = 1.35 * inch
+    DETAIL_W  = CONTENT_W - PHOTO_W - 0.1 * inch
+
+    # ── Styles ────────────────────────────────────────────────────────────────
+    def ps(name, **kw):
+        base = kw.pop('parent', None)
+        s = ParagraphStyle(name, parent=base)
+        for k, v in kw.items():
+            setattr(s, k, v)
+        return s
+
+    cover_title  = ps('CoverTitle',  fontSize=26, fontName='Helvetica-Bold',
+                       textColor=WHITE, alignment=1, leading=32, spaceAfter=4)
+    cover_estate = ps('CoverEstate', fontSize=15, fontName='Helvetica-Bold',
+                       textColor=GOLD,  alignment=1, leading=20, spaceAfter=2)
+    cover_meta   = ps('CoverMeta',   fontSize=10, fontName='Helvetica',
+                       textColor=colors.HexColor('#94a3b8'), alignment=1, leading=14)
+    section_hdr  = ps('SectionHdr',  fontSize=14, fontName='Helvetica-Bold',
+                       textColor=NAVY, spaceAfter=6, spaceBefore=4)
+    cat_label    = ps('CatLabel',    fontSize=10, fontName='Helvetica-Bold',
+                       textColor=WHITE)
+    item_name    = ps('ItemName',    fontSize=11, fontName='Helvetica-Bold',
+                       textColor=TEXT,  leading=14, spaceAfter=2)
+    item_detail  = ps('ItemDetail',  fontSize=8,  fontName='Helvetica',
+                       textColor=TEXT_SUB, leading=12)
+    item_desc    = ps('ItemDesc',    fontSize=8,  fontName='Helvetica',
+                       textColor=MUTED, leading=12, spaceAfter=0)
+    footer_style = ps('Footer',      fontSize=7,  fontName='Helvetica',
+                       textColor=MUTED, alignment=1)
+
+    def stat_label(t): return Paragraph(t, ps(f'sl_{t}', fontSize=9, fontName='Helvetica-Bold', textColor=MUTED))
+    def stat_value(t): return Paragraph(t, ps(f'sv_{t}', fontSize=14, fontName='Helvetica-Bold', textColor=NAVY, alignment=1))
+
+    # ── Pre-process ───────────────────────────────────────────────────────────
+    total_value = sum((i.get('estimatedValue') or i.get('estimated_value') or 0) for i in items)
+    dest_map    = {'sell': 'For Sale', 'family': 'For Family', 'donate': 'Donate',
+                   'charity': 'Charity', 'keep': 'Keep', 'discard': 'Discard'}
+
+    categories = {}
+    for item in items:
+        cat = item.get('category') or 'Uncategorized'
+        if cat not in categories:
+            categories[cat] = {'count': 0, 'value': 0.0}
+        categories[cat]['count'] += 1
+        categories[cat]['value'] += (item.get('estimatedValue') or item.get('estimated_value') or 0)
+
+    # ── Page-number callback ──────────────────────────────────────────────────
+    def add_page_decorations(canvas, doc):
+        canvas.saveState()
+        # Bottom gold line + page number
+        canvas.setFillColor(GOLD)
+        canvas.rect(0.6 * inch, 0.38 * inch, CONTENT_W, 1.5, fill=1, stroke=0)
+        canvas.setFont('Helvetica', 7)
+        canvas.setFillColor(MUTED)
+        canvas.drawCentredString(PAGE_W / 2, 0.25 * inch, f'Page {doc.page}  ·  MyEstateAlly Estate Inventory Report  ·  myestateally.com')
+        canvas.restoreState()
+
+    # ── Build story ───────────────────────────────────────────────────────────
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=letter,
+        leftMargin=0.6*inch, rightMargin=0.6*inch,
+        topMargin=0.6*inch,  bottomMargin=0.65*inch
+    )
+    story = []
+
+    # ── Cover block ───────────────────────────────────────────────────────────
+    cover_rows = [
+        [Paragraph('Estate Inventory Report', cover_title)],
+        [Paragraph(estate_name, cover_estate)],
+        [Spacer(1, 0.1*inch)],
+        [Paragraph(f'Prepared for: {user_name}', cover_meta)],
+        [Paragraph(f'Generated: {datetime.now().strftime("%B %d, %Y")}', cover_meta)],
+        [Spacer(1, 0.25*inch)],
+    ]
+    cover_tbl = Table(cover_rows, colWidths=[CONTENT_W])
+    cover_tbl.setStyle(TableStyle([
+        ('BACKGROUND',    (0, 0), (-1, -1), NAVY),
+        ('TOPPADDING',    (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('LEFTPADDING',   (0, 0), (-1, -1), 24),
+        ('RIGHTPADDING',  (0, 0), (-1, -1), 24),
+        ('TOPPADDING',    (0, 0), (0, 0),  28),
+        ('BOTTOMPADDING', (0, -1), (0, -1), 24),
+        ('LINEABOVE',     (0, 0), (-1, 0),  3, GOLD),
+        ('LINEBELOW',     (0, -1), (-1, -1), 2, GOLD),
+    ]))
+    story.append(cover_tbl)
+    story.append(Spacer(1, 0.3*inch))
+
+    # ── Stats row ─────────────────────────────────────────────────────────────
+    sell_ct   = sum(1 for i in items if i.get('destination') == 'sell')
+    family_ct = sum(1 for i in items if i.get('destination') == 'family')
+    donate_ct = sum(1 for i in items if i.get('destination') in ('donate','charity'))
+
+    stats_data = [[
+        [stat_label('TOTAL ITEMS'),   stat_value(str(len(items)))],
+        [stat_label('EST. VALUE'),     stat_value(f'${total_value:,.0f}')],
+        [stat_label('FOR SALE'),       stat_value(str(sell_ct))],
+        [stat_label('FOR FAMILY'),     stat_value(str(family_ct))],
+        [stat_label('DONATE/CHARITY'), stat_value(str(donate_ct))],
+    ]]
+    col_w = CONTENT_W / 5
+    stats_tbl = Table(stats_data, colWidths=[col_w]*5)
+    stats_tbl.setStyle(TableStyle([
+        ('ALIGN',         (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN',        (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING',    (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+        ('BOX',           (0, 0), (-1, -1), 0.5, BORDER),
+        ('INNERGRID',     (0, 0), (-1, -1), 0.5, BORDER),
+        ('BACKGROUND',    (0, 0), (-1, -1), LIGHT_BG),
+    ]))
+    story.append(stats_tbl)
+    story.append(Spacer(1, 0.3*inch))
+
+    # ── Category summary table ────────────────────────────────────────────────
+    story.append(Paragraph('Breakdown by Category', section_hdr))
+    cat_rows = [['Category', 'Items', 'Est. Value']]
+    for cat_n, cat_d in sorted(categories.items()):
+        cat_rows.append([cat_n, str(cat_d['count']), f"${cat_d['value']:,.2f}"])
+    cat_tbl = Table(cat_rows, colWidths=[CONTENT_W - 2*inch, 0.8*inch, 1.2*inch])
+    cat_tbl.setStyle(TableStyle([
+        ('BACKGROUND',    (0, 0), (-1, 0),  NAVY),
+        ('TEXTCOLOR',     (0, 0), (-1, 0),  WHITE),
+        ('FONTNAME',      (0, 0), (-1, 0),  'Helvetica-Bold'),
+        ('FONTSIZE',      (0, 0), (-1, -1), 9),
+        ('ALIGN',         (1, 0), (-1, -1), 'RIGHT'),
+        ('TOPPADDING',    (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('LEFTPADDING',   (0, 0), (-1, -1), 8),
+        ('RIGHTPADDING',  (0, 0), (-1, -1), 8),
+        ('ROWBACKGROUNDS',(0, 1), (-1, -1), [WHITE, LIGHT_BG]),
+        ('BOX',           (0, 0), (-1, -1), 0.5, BORDER),
+        ('INNERGRID',     (0, 0), (-1, -1), 0.5, BORDER),
+    ]))
+    story.append(cat_tbl)
+    story.append(PageBreak())
+
+    # ── Full item listing ─────────────────────────────────────────────────────
+    story.append(Paragraph('Full Inventory', section_hdr))
+
+    items_by_cat = {}
+    for item in items:
+        cat = item.get('category') or 'Uncategorized'
+        items_by_cat.setdefault(cat, []).append(item)
+
+    for cat_n in sorted(items_by_cat.keys()):
+        # Category header bar
+        cat_bar = Table([[Paragraph(f'  {cat_n.upper()}', cat_label)]], colWidths=[CONTENT_W])
+        cat_bar.setStyle(TableStyle([
+            ('BACKGROUND',    (0, 0), (-1, -1), GOLD),
+            ('TOPPADDING',    (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ('LINEABOVE',     (0, 0), (-1, 0),  1, GOLD_DARK),
+        ]))
+        story.append(KeepTogether([cat_bar, Spacer(1, 2)]))
+
+        for item in items_by_cat[cat_n]:
+            # Photo cell
+            photo_cell = Spacer(PHOTO_W, PHOTO_W)
+            photo_b64 = item.get('photo_data', '')
+            if photo_b64:
+                try:
+                    raw = base64.b64decode(photo_b64)
+                    img_buf = BytesIO(raw)
+                    photo_cell = RLImage(img_buf, width=PHOTO_W, height=PHOTO_W, kind='proportional')
+                except Exception:
+                    photo_cell = Paragraph('<font color="#9ca3af">[photo]</font>', item_detail)
+
+            # Value & destination
+            val  = item.get('estimatedValue') or item.get('estimated_value') or 0
+            dest = dest_map.get(item.get('destination') or 'keep', 'Keep')
+
+            # Detail paragraphs
+            name_p = Paragraph(item.get('name') or 'Unnamed Item', item_name)
+
+            meta_parts = []
+            if item.get('condition'):  meta_parts.append(f"Condition: <b>{item['condition']}</b>")
+            if item.get('location'):   meta_parts.append(f"Location: <b>{item['location']}</b>")
+            meta_parts.append(f"Est. Value: <b>${val:,.2f}</b>")
+            meta_parts.append(f"Status: <b>{dest}</b>")
+            meta_p = Paragraph('  ·  '.join(meta_parts), item_detail)
+
+            detail_cells = [name_p, meta_p]
+
+            desc = (item.get('description') or '').strip()
+            if desc:
+                if len(desc) > 220:
+                    desc = desc[:220] + '…'
+                detail_cells.append(Paragraph(desc, item_desc))
+
+            notes = (item.get('notes') or '').strip()
+            if notes:
+                detail_cells.append(Paragraph(f'<i>Notes: {notes[:160]}</i>', item_desc))
+
+            row_tbl = Table(
+                [[photo_cell, detail_cells]],
+                colWidths=[PHOTO_W + 0.05*inch, DETAIL_W]
+            )
+            row_tbl.setStyle(TableStyle([
+                ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
+                ('TOPPADDING',    (0, 0), (-1, -1), 7),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 7),
+                ('LEFTPADDING',   (0, 0), (0,  -1), 4),
+                ('LEFTPADDING',   (1, 0), (1,  -1), 10),
+                ('RIGHTPADDING',  (0, 0), (-1, -1), 4),
+                ('LINEBELOW',     (0, 0), (-1, -1), 0.4, BORDER),
+            ]))
+            story.append(row_tbl)
+
+        story.append(Spacer(1, 0.15*inch))
+
+    # ── Footer note ───────────────────────────────────────────────────────────
+    story.append(Spacer(1, 0.3*inch))
+    story.append(Paragraph(
+        'This report was generated by MyEstateAlly (myestateally.com). '
+        'Estimated values are AI-assisted suggestions and are not certified appraisals. '
+        'Consult a professional appraiser for items of significant value.',
+        footer_style
+    ))
+
+    doc.build(story, onFirstPage=add_page_decorations, onLaterPages=add_page_decorations)
+    return buffer.getvalue()
 
 @app.route('/api/export/documents/csv', methods=['GET'])
 @require_auth
