@@ -6437,21 +6437,9 @@ h1, h2, h3,
     transform: translateY(-1px);
 }
 
-/* All secondary buttons in the main app (not landing page) adapt to dark navy bg.
-   The glamour theme is always applied regardless of OS dark-mode preference,
-   so we must explicitly fix secondary buttons here — they default to #f0f9ff
-   (near-white) which is invisible against the dark background. */
-body:not(.landing-page) .btn.secondary {
-    background: rgba(255, 255, 255, 0.10);
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    color: #ffffff !important;
-}
-body:not(.landing-page) .btn.secondary:hover {
-    background: rgba(255, 255, 255, 0.18);
-    border-color: rgba(255, 255, 255, 0.48);
-    color: #ffffff !important;
-    transform: translateY(-1px);
-}
+/* Secondary buttons in the app content area use the default light styling.
+   .header-actions .btn.secondary (above) handles the dark navy header.
+   No broad override needed — content area background is white. */
 
 /* --- 4. Navigation: dark gradient, gold active underline ------- */
 .nav {
@@ -6619,42 +6607,43 @@ body:not(.landing-page) .btn.secondary:hover {
     color: #4b5563 !important;
 }
 
-/* --- 8b. Inventory filter selects & inputs on dark navy background ----------
-   On hover, the base CSS uses --bg-accent (#eff6ff near-white) but the text
-   is white (glamour/dark-mode). Fix: translucent-white bg + gold border on hover,
-   dark navy bg on option elements so dropdown list is always readable. ---------- */
+/* --- 8b. Inventory filter selects & inputs --------------------------------
+   The content area background is white (glamour only darkens header/nav).
+   Controls must use dark text on white background — visible in all modes.
+   Only override hover/focus to swap out the near-white --bg-accent (#eff6ff)
+   that would hide the dark text, replacing it with a gold-accent style. ---- */
 body:not(.landing-page) .inventory-filters select,
 body:not(.landing-page) .inventory-filters input[type="number"],
 body:not(.landing-page) .inventory-filters input[type="text"],
 body:not(.landing-page) .inventory-filters input[type="search"] {
-    background: rgba(255, 255, 255, 0.10);
-    border-color: rgba(255, 255, 255, 0.28);
-    color: #ffffff;
+    background: #ffffff;
+    border-color: #d1d5db;
+    color: #1f2937;
 }
 body:not(.landing-page) .inventory-filters select:hover,
 body:not(.landing-page) .inventory-filters input[type="number"]:hover,
 body:not(.landing-page) .inventory-filters input[type="text"]:hover,
 body:not(.landing-page) .inventory-filters input[type="search"]:hover {
-    background: rgba(255, 255, 255, 0.18);
+    background: #f9fafb;
     border-color: var(--gold);
-    color: #ffffff;
+    color: #1f2937;
 }
 body:not(.landing-page) .inventory-filters select:focus,
 body:not(.landing-page) .inventory-filters input:focus {
-    background: rgba(255, 255, 255, 0.18);
+    background: #ffffff;
     border-color: var(--gold);
-    color: #ffffff;
-    box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.25);
+    color: #1f2937;
+    box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.20);
     outline: none;
 }
-/* Dropdown option list — dark so white text is readable */
+/* Dropdown option list — white bg so dark text is readable */
 body:not(.landing-page) .inventory-filters select option {
-    background: #142238;   /* --navy-mid */
-    color: #ffffff;
+    background: #ffffff;
+    color: #1f2937;
 }
 /* Placeholder text */
 body:not(.landing-page) .inventory-filters input::placeholder {
-    color: rgba(255, 255, 255, 0.50);
+    color: #9ca3af;
 }
 
 /* --- 8. Inventory cards: gold value + hover glow --------------- */

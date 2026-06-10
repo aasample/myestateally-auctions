@@ -109,7 +109,7 @@ const CACHE_NAME = 'myestateally-v1.0.8';        // ← increment
 const STATIC_CACHE = 'myestateally-static-v1.0.8';
 const DYNAMIC_CACHE = 'myestateally-dynamic-v1.0.8';
 ```
-Current version: **v1.1.4**
+Current version: **v1.1.5**
 The SW calls `skipWaiting()` on install so the new version activates immediately.
 
 ---
@@ -227,6 +227,7 @@ The SW calls `skipWaiting()` on install so the new version activates immediately
 - `body:not(.landing-page)` is the correct scope for app-wide glamour overrides that must not bleed into the landing page.
 - `--bg-accent` (#eff6ff) and `--secondary-color` (#f0f9ff) are light-mode values that are NOT redefined in the dark mode `:root` block — never use them for backgrounds in the glamour context.
 - All `openModal()` / `closeModal()` calls (both class method and global function) must set `display` + `visibility` + `pointerEvents` together.
+- **Content area background is WHITE** — the glamour theme only darkens the header and nav. Never set `color: #fff` on content-area controls. Only `.header-actions .btn.secondary` and `.modal-header` need white-text-on-dark treatment. Broad `body:not(.landing-page)` overrides for text color will make controls invisible in the content area.
 
 ### Phase 9 — SEO + Dashboard Rewrite (May 2026)
 - **Landing page SEO overhaul**: title, meta description, canonical, Open Graph, Twitter Card, Schema.org JSON-LD (`SoftwareApplication`)
