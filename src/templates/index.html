@@ -189,39 +189,7 @@
                     </button>
                 </div>
 
-                <!-- Stats (up top — immediately useful) -->
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-icon"><i class="fas fa-boxes"></i></div>
-                        <div class="stat-content">
-                            <h3 id="total-items">0</h3>
-                            <p>Total Items</p>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon"><i class="fas fa-dollar-sign"></i></div>
-                        <div class="stat-content">
-                            <h3 id="total-value">$0</h3>
-                            <p>Estimated Value</p>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon"><i class="fas fa-tag"></i></div>
-                        <div class="stat-content">
-                            <h3 id="for-sale-items">0</h3>
-                            <p>For Sale</p>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon"><i class="fas fa-heart"></i></div>
-                        <div class="stat-content">
-                            <h3 id="assigned-items">0</h3>
-                            <p>Assigned</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Next Steps Card (shown when items < 5; JS hides when not needed) -->
+                <!-- Next Steps Card — guidance first for new users (hides at >= 5 items) -->
                 <div class="next-step-card" id="next-step-card">
                     <h3><i class="fas fa-compass"></i> <span id="next-step-title">Getting Started — 3 easy steps</span></h3>
                     <ul class="onboarding-list" id="onboarding-list">
@@ -239,7 +207,7 @@
                                 <strong>Invite a family member</strong>
                                 <span>Share the estate so everyone can see items and mark what matters to them</span>
                             </div>
-                            <button class="btn secondary btn-sm" onclick="app.showSection('family')">Invite</button>
+                            <button class="btn secondary btn-sm" onclick="app.switchTab('family')">Invite</button>
                         </li>
                         <li class="onboarding-item" id="step-upload-doc">
                             <i class="fas fa-file-upload step-icon"></i>
@@ -247,60 +215,132 @@
                                 <strong>Upload a key document</strong>
                                 <span>Will, deed, insurance policy — stored safely, findable fast</span>
                             </div>
-                            <button class="btn secondary btn-sm" onclick="app.showSection('documents')">Upload</button>
+                            <button class="btn secondary btn-sm" onclick="app.switchTab('documents')">Upload</button>
                         </li>
                     </ul>
                 </div>
 
-                <!-- Quick Actions -->
-                <div class="quick-actions">
-                    <h3>Quick Actions</h3>
-                    <div class="actions-grid">
-                        <button class="action-btn" id="add-item-btn">
-                            <i class="fas fa-plus"></i>
-                            Add New Item
-                        </button>
-                        <button class="action-btn" id="ai-pricing-btn">
-                            <i class="fas fa-robot"></i>
-                            AI Price Lookup
-                        </button>
-                        <button class="action-btn" id="browse-inventory-btn">
-                            <i class="fas fa-search"></i>
-                            Browse Inventory
-                        </button>
-                        <button class="action-btn" id="export-data-btn">
-                            <i class="fas fa-download"></i>
-                            Export Data
-                        </button>
+                <!-- At a Glance — clickable stats -->
+                <h3 class="dashboard-section-title"><i class="fas fa-chart-line"></i> At a Glance</h3>
+                <div class="stats-grid">
+                    <div class="stat-card stat-card--link" onclick="app.switchTab('inventory')" role="button" tabindex="0" title="View your inventory">
+                        <div class="stat-icon"><i class="fas fa-boxes"></i></div>
+                        <div class="stat-content">
+                            <h3 id="total-items">0</h3>
+                            <p>Total Items</p>
+                        </div>
+                    </div>
+                    <div class="stat-card stat-card--link" onclick="app.switchTab('inventory')" role="button" tabindex="0" title="View your inventory">
+                        <div class="stat-icon"><i class="fas fa-dollar-sign"></i></div>
+                        <div class="stat-content">
+                            <h3 id="total-value">$0</h3>
+                            <p>Estimated Value</p>
+                        </div>
+                    </div>
+                    <div class="stat-card stat-card--link" onclick="app.switchTab('inventory')" role="button" tabindex="0" title="View items for sale">
+                        <div class="stat-icon"><i class="fas fa-tag"></i></div>
+                        <div class="stat-content">
+                            <h3 id="for-sale-items">0</h3>
+                            <p>For Sale</p>
+                        </div>
+                    </div>
+                    <div class="stat-card stat-card--link" onclick="app.switchTab('family')" role="button" tabindex="0" title="View family sharing">
+                        <div class="stat-icon"><i class="fas fa-heart"></i></div>
+                        <div class="stat-content">
+                            <h3 id="assigned-items">0</h3>
+                            <p>Assigned</p>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Hero Upload Section -->
-                <div class="hero-upload">
-                    <div class="hero-content">
-                        <div class="hero-icon">
-                            <i class="fas fa-camera"></i>
-                        </div>
-                        <h2>Add Item with AI Analysis</h2>
-                        <p>Take a photo and let AI identify your item, estimate its value, and create a description</p>
+                <!-- Add Items + Go To — two columns on desktop -->
+                <div class="dashboard-main-grid">
+                    <div class="dashboard-col">
+                        <h3 class="dashboard-section-title"><i class="fas fa-plus-circle"></i> Add Items</h3>
+                        <div class="hero-upload">
+                            <div class="hero-content">
+                                <div class="hero-icon">
+                                    <i class="fas fa-camera"></i>
+                                </div>
+                                <h2>Add Item with AI Analysis</h2>
+                                <p>Take a photo and let AI identify your item, estimate its value, and create a description</p>
 
-                        <div class="upload-area" id="hero-upload-area">
-                            <div class="upload-placeholder">
-                                <i class="fas fa-cloud-upload-alt"></i>
-                                <p>Drop photo here or click to browse</p>
-                                <small>Supports JPG, PNG, HEIC</small>
+                                <div class="upload-area" id="hero-upload-area">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-cloud-upload-alt"></i>
+                                        <p>Drop photo here or click to browse</p>
+                                        <small>Supports JPG, PNG, HEIC</small>
+                                    </div>
+                                    <input type="file" id="hero-photo-upload" accept="image/*,.heic,.heif" capture="environment" style="display: none;">
+                                </div>
+
+                                <div class="hero-actions">
+                                    <button class="btn primary" id="take-photo-btn">
+                                        <i class="fas fa-camera"></i>
+                                        Take Photo
+                                    </button>
+                                    <button class="btn secondary" id="qr-upload-btn">
+                                        <i class="fas fa-qrcode"></i>
+                                        Use Phone Camera
+                                    </button>
+                                </div>
+
+                                <div class="hero-upload-secondary">
+                                    <button class="btn secondary" onclick="app.showBulkPhotoImportModal()">
+                                        <i class="fas fa-images"></i>
+                                        Add Many at Once
+                                    </button>
+                                    <button class="btn secondary" onclick="app.openModal('add-item-modal')">
+                                        <i class="fas fa-keyboard"></i>
+                                        Type Details Instead
+                                    </button>
+                                </div>
                             </div>
-                            <input type="file" id="hero-photo-upload" accept="image/*,.heic,.heif" capture="environment" style="display: none;">
                         </div>
+                    </div>
 
-                        <div class="hero-actions">
-                            <button class="btn primary" id="take-photo-btn">
-                                <i class="fas fa-camera"></i>
-                                Take Photo
+                    <div class="dashboard-col">
+                        <h3 class="dashboard-section-title"><i class="fas fa-compass"></i> Go To</h3>
+                        <div class="shortcut-list">
+                            <button class="shortcut-item" onclick="app.switchTab('inventory')">
+                                <span class="shortcut-icon"><i class="fas fa-boxes"></i></span>
+                                <span class="shortcut-text">
+                                    <strong>Browse Inventory</strong>
+                                    <span>See, edit, and organize every item</span>
+                                </span>
+                                <i class="fas fa-chevron-right shortcut-arrow"></i>
                             </button>
-                            <button class="btn secondary" id="qr-upload-btn">
-                                <i class="fas fa-qrcode"></i>
-                                Use Phone Camera
+                            <button class="shortcut-item" onclick="app.switchTab('ai-pricing')">
+                                <span class="shortcut-icon"><i class="fas fa-search-dollar"></i></span>
+                                <span class="shortcut-text">
+                                    <strong>AI Price Lookup</strong>
+                                    <span>Find out what something is worth</span>
+                                </span>
+                                <i class="fas fa-chevron-right shortcut-arrow"></i>
+                            </button>
+                            <button class="shortcut-item" onclick="app.switchTab('family')">
+                                <span class="shortcut-icon"><i class="fas fa-users"></i></span>
+                                <span class="shortcut-text">
+                                    <strong>Family Sharing</strong>
+                                    <span>Invite family and assign items</span>
+                                </span>
+                                <i class="fas fa-chevron-right shortcut-arrow"></i>
+                            </button>
+                            <button class="shortcut-item" onclick="app.switchTab('documents')">
+                                <span class="shortcut-icon"><i class="fas fa-file-alt"></i></span>
+                                <span class="shortcut-text">
+                                    <strong>Documents</strong>
+                                    <span>Wills, deeds, and important papers</span>
+                                </span>
+                                <i class="fas fa-chevron-right shortcut-arrow"></i>
+                            </button>
+                            <button class="shortcut-item" onclick="app.switchTab('estate')">
+                                <span class="shortcut-icon"><i class="fas fa-clipboard-list"></i></span>
+                                <span class="shortcut-text">
+                                    <strong>Estate Settlement</strong>
+                                    <span>Track tasks and settlement progress</span>
+                                </span>
+                                <i class="fas fa-chevron-right shortcut-arrow"></i>
                             </button>
                         </div>
                     </div>

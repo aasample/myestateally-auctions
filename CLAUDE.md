@@ -109,7 +109,7 @@ const CACHE_NAME = 'myestateally-v1.0.8';        // ← increment
 const STATIC_CACHE = 'myestateally-static-v1.0.8';
 const DYNAMIC_CACHE = 'myestateally-dynamic-v1.0.8';
 ```
-Current version: **v1.1.8**
+Current version: **v1.1.9**
 The SW calls `skipWaiting()` on install so the new version activates immediately.
 
 ---
@@ -251,6 +251,14 @@ The SW calls `skipWaiting()` on install so the new version activates immediately
 - SW bumped to **v1.1.6**
 - **Poshmark added as 4th platform** (June 2026): create-listing URL `poshmark.com/create-listing`, brand colour `#822432`, tshirt icon; AI prompt now asks for brand/size/material on clothing; backend whitelist + tracker checkbox + badge all include `poshmark`; SW **v1.1.7**
 - **Onboarding completed-step restyle** (June 2026): strikethrough on done steps read as "unavailable" to seniors — replaced with green check icon, soft green tint, "Done" pill (CSS `::after`), and hidden action button; SW **v1.1.8**
+
+### Phase 11 — Dashboard Redesign (June 2026)
+- **User complaint**: dashboard placement felt random. Audit found 4 real defects: `export-data-btn` had NO listener (dead button); `add-item-btn` and `browse-inventory-btn` quick actions both just did `switchTab('inventory')` (duplicates); onboarding card buttons called non-existent `app.showSection()` (correct method is **`switchTab`**); `take-photo-btn` had no listener (dead).
+- **New logical order**: Welcome card → Next Steps (moved up, guidance first for new users) → "At a Glance" stats (now clickable, navigate via `switchTab`) → two-column `dashboard-main-grid` ("Add Items" = hero upload + Add Many at Once + Type Details Instead | "Go To" = 5 shortcut cards with descriptions) → Recent Activity
+- **Removed**: old Quick Actions block entirely (redundant/dead buttons). Old listeners use `?.` so removed IDs are harmless.
+- **`take-photo-btn` wired** in `setupHeroUpload()` → clicks the hero file input (camera on mobile via `capture` attr)
+- **CSS**: `.dashboard-section-title`, `.stat-card--link`, `.dashboard-main-grid` (3fr/2fr, 1-col ≤900px), `.hero-upload-secondary`, `.shortcut-list/.shortcut-item/.shortcut-icon/.shortcut-text/.shortcut-arrow`
+- SW bumped to **v1.1.9**
 
 ---
 

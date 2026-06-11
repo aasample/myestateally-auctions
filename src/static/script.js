@@ -368,6 +368,12 @@ class MyEstateAllyApp {
                 this.processHeroPhoto(e.target.files[0]);
             }
         });
+
+        // "Take Photo" button — opens the camera on mobile (capture attr),
+        // file picker on desktop. Was previously a dead button with no listener.
+        document.getElementById('take-photo-btn')?.addEventListener('click', () => {
+            fileInput.click();
+        });
     }
 
     /**

@@ -7448,6 +7448,123 @@ body:not(.landing-page) .inventory-filters input::placeholder {
     }
 }
 
+/* ── Dashboard Redesign: section titles, clickable stats, 2-col grid ──
+   Content area background is WHITE — dark text throughout. */
+
+.dashboard-section-title {
+    font-family: var(--font-serif);
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--navy, #0a1628);
+    margin: 1.5rem 0 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.dashboard-section-title i { color: var(--gold-dark, #a0832e); }
+
+/* Clickable stat cards — they navigate to the relevant section */
+.stat-card--link {
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+    border: 1px solid transparent;
+}
+.stat-card--link:hover,
+.stat-card--link:focus-visible {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.10), 0 0 0 1px rgba(201, 168, 76, 0.35);
+    outline: none;
+}
+
+/* Two-column layout: Add Items | Go To */
+.dashboard-main-grid {
+    display: grid;
+    grid-template-columns: 3fr 2fr;
+    gap: var(--spacing-lg);
+    align-items: start;
+}
+.dashboard-col { min-width: 0; }
+
+/* Secondary add options under the hero upload */
+.hero-upload-secondary {
+    display: flex;
+    gap: 0.6rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 0.75rem;
+}
+
+/* Shortcut list — labelled navigation cards with descriptions */
+.shortcut-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+.shortcut-item {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    width: 100%;
+    padding: 0.85rem 1rem;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+.shortcut-item:hover,
+.shortcut-item:focus-visible {
+    border-color: var(--gold, #c9a84c);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    transform: translateY(-1px);
+    outline: none;
+}
+.shortcut-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--navy, #0a1628) 0%, #1e3a5f 100%);
+    color: var(--gold, #c9a84c);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.05rem;
+    flex-shrink: 0;
+}
+.shortcut-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+.shortcut-text strong {
+    color: #1f2937;
+    font-size: 1rem;
+    font-weight: 600;
+}
+.shortcut-text span {
+    color: #6b7280;
+    font-size: 0.825rem;
+    line-height: 1.35;
+}
+.shortcut-arrow {
+    color: #d1d5db;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+    transition: color 0.2s, transform 0.2s;
+}
+.shortcut-item:hover .shortcut-arrow {
+    color: var(--gold-dark, #a0832e);
+    transform: translateX(3px);
+}
+
+@media (max-width: 900px) {
+    .dashboard-main-grid { grid-template-columns: 1fr; }
+}
+
 /* ── Listing Assistant (Sell on Facebook / eBay / Craigslist) ────
    Modal body background is WHITE — use dark text throughout. */
 
