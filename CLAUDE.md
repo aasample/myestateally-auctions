@@ -109,7 +109,7 @@ const CACHE_NAME = 'myestateally-v1.0.8';        // ← increment
 const STATIC_CACHE = 'myestateally-static-v1.0.8';
 const DYNAMIC_CACHE = 'myestateally-dynamic-v1.0.8';
 ```
-Current version: **v1.1.7**
+Current version: **v1.1.8**
 The SW calls `skipWaiting()` on install so the new version activates immediately.
 
 ---
@@ -250,6 +250,7 @@ The SW calls `skipWaiting()` on install so the new version activates immediately
 - JS: `openListingAssistant`, `generateListingCopy`, `copyListingText`, `downloadListingPhoto`, `openMarketplace`, `saveListingStatus` (prototype methods at end of script.js)
 - SW bumped to **v1.1.6**
 - **Poshmark added as 4th platform** (June 2026): create-listing URL `poshmark.com/create-listing`, brand colour `#822432`, tshirt icon; AI prompt now asks for brand/size/material on clothing; backend whitelist + tracker checkbox + badge all include `poshmark`; SW **v1.1.7**
+- **Onboarding completed-step restyle** (June 2026): strikethrough on done steps read as "unavailable" to seniors — replaced with green check icon, soft green tint, "Done" pill (CSS `::after`), and hidden action button; SW **v1.1.8**
 
 ---
 

@@ -7389,9 +7389,26 @@ body:not(.landing-page) .inventory-filters input::placeholder {
     text-align: center;
 }
 
-/* Completed step — icon turns green, text muted */
+/* Completed step — green check + soft green tint + "Done" pill.
+   No strikethrough: crossed-out text reads as "unavailable" to seniors. */
+.onboarding-item.completed {
+    background: rgba(74, 222, 128, 0.10);
+    border-color: rgba(74, 222, 128, 0.35);
+}
 .onboarding-item.completed .step-icon { color: #4ade80; }
-.onboarding-item.completed .onboarding-item__text strong { text-decoration: line-through; opacity: 0.55; }
+.onboarding-item.completed .onboarding-item__text strong { color: #ffffff; }
+.onboarding-item.completed .onboarding-item__text span { color: rgba(255, 255, 255, 0.55); }
+.onboarding-item.completed .btn { display: none; }
+.onboarding-item.completed::after {
+    content: 'Done';
+    background: #16a34a;
+    color: #ffffff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.25rem 0.7rem;
+    border-radius: 999px;
+    flex-shrink: 0;
+}
 
 .onboarding-item__text {
     flex: 1;
