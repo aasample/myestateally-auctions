@@ -7622,6 +7622,7 @@ body:not(.landing-page) .inventory-filters input::placeholder {
 .marketplace-facebook  { background: #1877f2; }
 .marketplace-ebay      { background: #0064d2; }
 .marketplace-craigslist { background: #5c2d91; }
+.marketplace-poshmark  { background: #822432; }
 
 /* Listing tracker — big checkboxes for easy clicking */
 .listing-tracker {

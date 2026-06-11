@@ -783,6 +783,7 @@ class MyEstateAllyApp {
         if (l.facebook) names.push('Facebook');
         if (l.ebay) names.push('eBay');
         if (l.craigslist) names.push('Craigslist');
+        if (l.poshmark) names.push('Poshmark');
         if (!names.length) return '';
         return `<span class="listed-badge"><i class="fas fa-store"></i> Listed: ${names.join(' · ')}</span>`;
     }
@@ -6263,9 +6264,11 @@ MyEstateAllyApp.prototype.openListingAssistant = function(itemId) {
     const fb = document.getElementById('listed-facebook');
     const eb = document.getElementById('listed-ebay');
     const cl = document.getElementById('listed-craigslist');
+    const pm = document.getElementById('listed-poshmark');
     if (fb) fb.checked = !!listings.facebook;
     if (eb) eb.checked = !!listings.ebay;
     if (cl) cl.checked = !!listings.craigslist;
+    if (pm) pm.checked = !!listings.poshmark;
 
     this.openModal('listing-assistant-modal');
 };
@@ -6365,7 +6368,8 @@ MyEstateAllyApp.prototype.openMarketplace = function(platform) {
     const urls = {
         facebook:  'https://www.facebook.com/marketplace/create/item',
         ebay:      'https://www.ebay.com/sl/sell',
-        craigslist:'https://post.craigslist.org/'
+        craigslist:'https://post.craigslist.org/',
+        poshmark:  'https://poshmark.com/create-listing'
     };
     const url = urls[platform];
     if (url) window.open(url, '_blank', 'noopener');
@@ -6379,7 +6383,8 @@ MyEstateAllyApp.prototype.saveListingStatus = async function() {
     const listings = {
         facebook:   !!document.getElementById('listed-facebook')?.checked,
         ebay:       !!document.getElementById('listed-ebay')?.checked,
-        craigslist: !!document.getElementById('listed-craigslist')?.checked
+        craigslist: !!document.getElementById('listed-craigslist')?.checked,
+        poshmark:   !!document.getElementById('listed-poshmark')?.checked
     };
     try {
         const response = await fetch(`/api/items/${this.listingItem.id}`, {

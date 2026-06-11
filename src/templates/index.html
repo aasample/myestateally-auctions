@@ -1678,6 +1678,9 @@
                             <button class="marketplace-btn marketplace-craigslist" onclick="app.openMarketplace('craigslist')">
                                 <i class="fas fa-clipboard-list"></i> Craigslist
                             </button>
+                            <button class="marketplace-btn marketplace-poshmark" onclick="app.openMarketplace('poshmark')" title="Great for clothing, shoes, and accessories">
+                                <i class="fas fa-tshirt"></i> Poshmark
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1700,6 +1703,10 @@
                             <label class="listing-track-option">
                                 <input type="checkbox" id="listed-craigslist" onchange="app.saveListingStatus()">
                                 <span>Craigslist</span>
+                            </label>
+                            <label class="listing-track-option">
+                                <input type="checkbox" id="listed-poshmark" onchange="app.saveListingStatus()">
+                                <span>Poshmark</span>
                             </label>
                         </div>
                     </div>

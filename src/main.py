@@ -1418,9 +1418,9 @@ def update_item(item_id):
             data.get('destinationDetail', item.get('destinationDetail', '')), max_length=200
         )
 
-        # Marketplace listing tracker (Facebook Marketplace / eBay / Craigslist)
+        # Marketplace listing tracker (Facebook Marketplace / eBay / Craigslist / Poshmark)
         if 'listings' in data and isinstance(data['listings'], dict):
-            allowed_platforms = {'facebook', 'ebay', 'craigslist'}
+            allowed_platforms = {'facebook', 'ebay', 'craigslist', 'poshmark'}
             item['listings'] = {
                 k: bool(v) for k, v in data['listings'].items() if k in allowed_platforms
             }
@@ -6710,7 +6710,9 @@ def ai_generate_listing():
         value_clause = f"The owner's estimated value is ${est_value:,.0f}." if est_value else ""
 
         prompt = f"""You are an expert at writing online marketplace listings that sell quickly
-(Facebook Marketplace, eBay, Craigslist).
+(Facebook Marketplace, eBay, Craigslist, Poshmark). For clothing, shoes, or accessories,
+include brand, size, and material details in the description when visible — buyers on
+Poshmark search by those.
 
 Item name: {item.get('name', 'Unknown item')}
 Category: {item.get('category', 'Other')}
