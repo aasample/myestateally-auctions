@@ -109,7 +109,7 @@ const CACHE_NAME = 'myestateally-v1.0.8';        // ← increment
 const STATIC_CACHE = 'myestateally-static-v1.0.8';
 const DYNAMIC_CACHE = 'myestateally-dynamic-v1.0.8';
 ```
-Current version: **v1.1.5**
+Current version: **v1.1.6**
 The SW calls `skipWaiting()` on install so the new version activates immediately.
 
 ---
@@ -240,6 +240,15 @@ The SW calls `skipWaiting()` on install so the new version activates immediately
 - **`getTimeGreeting()` + `updateWelcomeCard()`** added to `script.js`; called from `updateStats()` and `updateEstateSelector()` so subtitle refreshes when switching estates
 - **CSS**: `.welcome-card--dynamic`, `.next-step-card`, `.onboarding-list`, `.onboarding-item`, `.onboarding-item__text`, `.btn-sm` added to glamour section in `styles.css`
 - SW bumped to **v1.1.4**
+
+### Phase 10 — Listing Assistant (June 2026)
+- **Marketplace reality**: Facebook Marketplace and Craigslist have NO public APIs (automated posting violates their ToS); eBay's API needs a developer account + approval. So the integration is a **Listing Assistant**, not direct API posting.
+- **"Sell" button** on item cards (`.sell-btn`, green) → opens `listing-assistant-modal`
+- **3-step senior-friendly modal**: (1) AI writes title/price/description with copy buttons + photo download, (2) brand-coloured buttons open each marketplace's create-listing page in a new tab, (3) checkboxes track where the item is listed
+- **Backend**: `POST /api/ai/generate-listing` (Gemini, mirrors lookup-item pattern, 30/hr rate limit, includes item photo if ≤300KB); `PUT /api/items/<id>` now persists a `listings` dict (`facebook`/`ebay`/`craigslist` booleans only)
+- **`getListingBadgeHTML()`** shows "Listed: Facebook · eBay" pill on item cards; both card render paths updated (`updateInventoryDisplay` AND `displayFilteredInventory` — they have duplicate card templates!)
+- JS: `openListingAssistant`, `generateListingCopy`, `copyListingText`, `downloadListingPhoto`, `openMarketplace`, `saveListingStatus` (prototype methods at end of script.js)
+- SW bumped to **v1.1.6**
 
 ---
 

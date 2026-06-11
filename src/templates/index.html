@@ -1601,6 +1601,113 @@
         </div>
     </div>
 
+    <!-- Listing Assistant Modal — Sell on Facebook Marketplace / eBay / Craigslist -->
+    <div id="listing-assistant-modal" class="modal" style="display:none;">
+        <div class="modal-content listing-assistant-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-store"></i> Sell This Item Online</h3>
+                <button class="modal-close" onclick="app.closeModal('listing-assistant-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Item preview -->
+                <div class="listing-item-preview">
+                    <div class="listing-item-photo" id="listing-item-photo"><i class="fas fa-image"></i></div>
+                    <div class="listing-item-preview-text">
+                        <h4 id="listing-item-name">Item</h4>
+                        <p id="listing-item-meta" class="listing-item-meta"></p>
+                    </div>
+                </div>
+
+                <!-- Step 1: Prepare the listing -->
+                <div class="listing-step">
+                    <div class="listing-step-num">1</div>
+                    <div class="listing-step-body">
+                        <h4>Prepare your listing</h4>
+                        <p class="listing-step-hint">Let AI write a polished title and description, or type your own.</p>
+                        <button class="btn primary" id="generate-listing-btn" onclick="app.generateListingCopy()">
+                            <i class="fas fa-magic"></i> Write My Listing with AI
+                        </button>
+
+                        <div class="listing-field">
+                            <label for="listing-title">Listing Title</label>
+                            <div class="listing-copy-row">
+                                <input type="text" id="listing-title" maxlength="80" placeholder="e.g. Solid Oak Dining Table — Seats 6">
+                                <button class="btn secondary listing-copy-btn" onclick="app.copyListingText('listing-title', this)">
+                                    <i class="fas fa-copy"></i> Copy
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="listing-field">
+                            <label for="listing-price">Asking Price ($)</label>
+                            <div class="listing-copy-row">
+                                <input type="number" id="listing-price" min="0" step="1" placeholder="0">
+                                <button class="btn secondary listing-copy-btn" onclick="app.copyListingText('listing-price', this)">
+                                    <i class="fas fa-copy"></i> Copy
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="listing-field">
+                            <label for="listing-description">Description</label>
+                            <textarea id="listing-description" rows="6" placeholder="Describe the item, its condition, and pickup details..."></textarea>
+                            <button class="btn secondary listing-copy-btn listing-copy-desc" onclick="app.copyListingText('listing-description', this)">
+                                <i class="fas fa-copy"></i> Copy Description
+                            </button>
+                        </div>
+
+                        <button class="btn secondary" id="listing-download-photo-btn" onclick="app.downloadListingPhoto()">
+                            <i class="fas fa-download"></i> Download Photo for Listing
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Step 2: Open marketplace and paste -->
+                <div class="listing-step">
+                    <div class="listing-step-num">2</div>
+                    <div class="listing-step-body">
+                        <h4>Open a marketplace and paste</h4>
+                        <p class="listing-step-hint">Each site opens in a new tab. Paste your title, price, and description, then add the photo.</p>
+                        <div class="marketplace-buttons">
+                            <button class="marketplace-btn marketplace-facebook" onclick="app.openMarketplace('facebook')">
+                                <i class="fab fa-facebook"></i> Facebook Marketplace
+                            </button>
+                            <button class="marketplace-btn marketplace-ebay" onclick="app.openMarketplace('ebay')">
+                                <i class="fas fa-tag"></i> eBay
+                            </button>
+                            <button class="marketplace-btn marketplace-craigslist" onclick="app.openMarketplace('craigslist')">
+                                <i class="fas fa-clipboard-list"></i> Craigslist
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 3: Track listings -->
+                <div class="listing-step">
+                    <div class="listing-step-num">3</div>
+                    <div class="listing-step-body">
+                        <h4>Track where it's listed</h4>
+                        <p class="listing-step-hint">Check off where you posted it — saved automatically with the item.</p>
+                        <div class="listing-tracker">
+                            <label class="listing-track-option">
+                                <input type="checkbox" id="listed-facebook" onchange="app.saveListingStatus()">
+                                <span>Facebook Marketplace</span>
+                            </label>
+                            <label class="listing-track-option">
+                                <input type="checkbox" id="listed-ebay" onchange="app.saveListingStatus()">
+                                <span>eBay</span>
+                            </label>
+                            <label class="listing-track-option">
+                                <input type="checkbox" id="listed-craigslist" onchange="app.saveListingStatus()">
+                                <span>Craigslist</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Create Estate Modal -->
     <!-- Welcome Modal (First-time users) -->
     <div id="welcome-modal" class="modal">

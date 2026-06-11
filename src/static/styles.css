@@ -7431,6 +7431,227 @@ body:not(.landing-page) .inventory-filters input::placeholder {
     }
 }
 
+/* ── Listing Assistant (Sell on Facebook / eBay / Craigslist) ────
+   Modal body background is WHITE — use dark text throughout. */
+
+/* Sell button on item cards — matches edit/pricing/disposal pattern */
+.sell-btn {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    background-color: #16a34a;
+    color: white;
+}
+.sell-btn:hover { background-color: #15803d; }
+
+/* "Listed on" badge on item cards */
+.listed-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: #ecfdf5;
+    border: 1px solid #6ee7b7;
+    color: #047857;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    margin: 0.25rem 0.25rem 0.25rem 0;
+}
+
+.listing-assistant-content {
+    max-width: 620px;
+    width: 92%;
+}
+
+/* Item preview strip */
+.listing-item-preview {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    background: #f8f7f4;
+    border: 1px solid #e2d9c5;
+    border-radius: var(--radius-md);
+    padding: 0.75rem 1rem;
+    margin-bottom: 1.25rem;
+}
+.listing-item-photo {
+    width: 64px;
+    height: 64px;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    flex-shrink: 0;
+    background: #e5e7eb;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #9ca3af;
+    font-size: 1.5rem;
+}
+.listing-item-photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.listing-item-preview-text h4 {
+    margin: 0 0 0.2rem;
+    color: #1f2937;
+    font-size: 1.05rem;
+}
+.listing-item-meta {
+    margin: 0;
+    color: #6b7280;
+    font-size: 0.875rem;
+}
+
+/* Numbered steps — senior-friendly: big circles, clear text */
+.listing-step {
+    display: flex;
+    gap: var(--spacing-md);
+    padding: 1.1rem 0;
+    border-top: 1px solid #e5e7eb;
+    text-align: left;
+}
+.listing-step-num {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: var(--navy, #0a1628);
+    color: var(--gold, #c9a84c);
+    font-size: 1.15rem;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.listing-step-body { flex: 1; min-width: 0; }
+.listing-step-body h4 {
+    margin: 0.3rem 0 0.25rem;
+    color: #1f2937;
+    font-size: 1.05rem;
+}
+.listing-step-hint {
+    margin: 0 0 0.75rem;
+    color: #6b7280;
+    font-size: 0.9rem;
+}
+
+/* Listing fields */
+.listing-field { margin-top: 0.9rem; }
+.listing-field label {
+    display: block;
+    font-weight: 600;
+    color: #374151;
+    font-size: 0.9rem;
+    margin-bottom: 0.3rem;
+}
+.listing-copy-row {
+    display: flex;
+    gap: 0.5rem;
+}
+.listing-copy-row input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: var(--radius-sm);
+    font-size: 1rem;
+    color: #1f2937;
+    background: #ffffff;
+}
+.listing-field textarea {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: var(--radius-sm);
+    font-size: 1rem;
+    color: #1f2937;
+    background: #ffffff;
+    font-family: inherit;
+    resize: vertical;
+    box-sizing: border-box;
+}
+.listing-copy-row input:focus,
+.listing-field textarea:focus {
+    outline: none;
+    border-color: var(--gold, #c9a84c);
+    box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.2);
+}
+.listing-copy-btn { flex-shrink: 0; white-space: nowrap; }
+.listing-copy-desc { margin-top: 0.5rem; }
+.listing-copy-btn.copied {
+    background: #16a34a !important;
+    border-color: #16a34a !important;
+    color: #ffffff !important;
+}
+#listing-download-photo-btn { margin-top: 0.9rem; }
+
+/* Marketplace buttons — large tap targets, brand colours */
+.marketplace-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+.marketplace-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    width: 100%;
+    padding: 0.85rem 1rem;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #ffffff;
+    cursor: pointer;
+    transition: filter 0.2s, transform 0.2s;
+}
+.marketplace-btn:hover {
+    filter: brightness(1.12);
+    transform: translateY(-1px);
+}
+.marketplace-facebook  { background: #1877f2; }
+.marketplace-ebay      { background: #0064d2; }
+.marketplace-craigslist { background: #5c2d91; }
+
+/* Listing tracker — big checkboxes for easy clicking */
+.listing-tracker {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+}
+.listing-track-option {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 1rem;
+    color: #1f2937;
+    cursor: pointer;
+    padding: 0.35rem 0;
+}
+.listing-track-option input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    accent-color: #16a34a;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+@media (max-width: 540px) {
+    .listing-copy-row { flex-wrap: wrap; }
+    .listing-copy-row input { width: 100%; flex: none; }
+    .listing-copy-btn { width: 100%; justify-content: center; }
+}
+
 /* ================================================================
    END GLAMOUR THEME
    ================================================================ */

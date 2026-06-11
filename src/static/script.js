@@ -722,6 +722,7 @@ class MyEstateAllyApp {
                     <p class="item-description">${item.description || 'No description'}</p>
                     <p class="item-value item-value-editable" onclick="app.quickEditValue('${item.id}', ${item.estimatedValue || 0})" title="Click to edit value">$${(item.estimatedValue || 0).toLocaleString()} <i class="fas fa-pencil-alt item-value-edit-icon"></i></p>
                     ${this.getDestinationBadgeHTML(item)}
+                    ${this.getListingBadgeHTML(item)}
                     ${item.familyHistory ? '<span class="family-history-indicator"><i class="fas fa-heart"></i> Story</span>' : ''}
                     <div class="item-actions">
                         <button class="edit-btn" onclick="app.editItem('${item.id}')">
@@ -729,6 +730,9 @@ class MyEstateAllyApp {
                         </button>
                         <button class="pricing-btn" onclick="app.lookupItemPricing('${item.id}')">
                             <i class="fas fa-search-dollar"></i> Price
+                        </button>
+                        <button class="sell-btn" onclick="app.openListingAssistant('${item.id}')" title="Sell on Facebook Marketplace, eBay, or Craigslist">
+                            <i class="fas fa-store"></i> Sell
                         </button>
                         <button class="disposal-btn" onclick="app.showDisposalModal('${item.id}')" title="Mark as disposed">
                             <i class="fas fa-trash-alt"></i> Dispose
@@ -768,6 +772,19 @@ class MyEstateAllyApp {
         if (!dest && item.forSale) return '<span class="for-sale-badge">For Sale</span>';
         if (!dest && item.assignedTo) return `<span class="assigned-badge">Assigned to ${item.assignedTo}</span>`;
         return ''; // keep or unrecognized
+    }
+
+    /**
+     * Badge showing which marketplaces the item is currently listed on.
+     */
+    getListingBadgeHTML(item) {
+        const l = item.listings || {};
+        const names = [];
+        if (l.facebook) names.push('Facebook');
+        if (l.ebay) names.push('eBay');
+        if (l.craigslist) names.push('Craigslist');
+        if (!names.length) return '';
+        return `<span class="listed-badge"><i class="fas fa-store"></i> Listed: ${names.join(' · ')}</span>`;
     }
 
     /**
@@ -4183,6 +4200,7 @@ class MyEstateAllyApp {
                     <p class="item-description">${item.description || 'No description'}</p>
                     <p class="item-value item-value-editable" onclick="app.quickEditValue('${item.id}', ${item.estimatedValue || 0})" title="Click to edit value">$${(item.estimatedValue || 0).toLocaleString()} <i class="fas fa-pencil-alt item-value-edit-icon"></i></p>
                     ${this.getDestinationBadgeHTML(item)}
+                    ${this.getListingBadgeHTML(item)}
                     ${item.familyHistory ? '<span class="family-history-indicator"><i class="fas fa-heart"></i> Story</span>' : ''}
                     <div class="item-actions">
                         <button class="edit-btn" onclick="app.editItem('${item.id}')">
@@ -4190,6 +4208,9 @@ class MyEstateAllyApp {
                         </button>
                         <button class="pricing-btn" onclick="app.lookupItemPricing('${item.id}')">
                             <i class="fas fa-search-dollar"></i> Price
+                        </button>
+                        <button class="sell-btn" onclick="app.openListingAssistant('${item.id}')" title="Sell on Facebook Marketplace, eBay, or Craigslist">
+                            <i class="fas fa-store"></i> Sell
                         </button>
                         <button class="disposal-btn" onclick="app.showDisposalModal('${item.id}')" title="Mark as disposed">
                             <i class="fas fa-trash-alt"></i> Dispose
@@ -6196,4 +6217,189 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+
+// ============================================================================
+// LISTING ASSISTANT — Sell on Facebook Marketplace / eBay / Craigslist
+// ============================================================================
+
+/**
+ * Open the Listing Assistant modal for an item.
+ */
+MyEstateAllyApp.prototype.openListingAssistant = function(itemId) {
+    const item = this.inventory.find(i => i.id === itemId);
+    if (!item) {
+        this.showMessage('Item not found', 'error');
+        return;
+    }
+    this.listingItem = item;
+
+    // Item preview
+    const photoEl = document.getElementById('listing-item-photo');
+    if (photoEl) {
+        photoEl.innerHTML = item.photo
+            ? `<img src="${item.photo}" alt="">`
+            : '<i class="fas fa-image"></i>';
+    }
+    const nameEl = document.getElementById('listing-item-name');
+    if (nameEl) nameEl.textContent = item.name || 'Unnamed Item';
+    const metaEl = document.getElementById('listing-item-meta');
+    if (metaEl) metaEl.textContent =
+        `${item.category || 'Uncategorized'} · Est. value $${(item.estimatedValue || 0).toLocaleString()}`;
+
+    // Prefill editable fields from the item
+    const titleEl = document.getElementById('listing-title');
+    const priceEl = document.getElementById('listing-price');
+    const descEl  = document.getElementById('listing-description');
+    if (titleEl) titleEl.value = item.name || '';
+    if (priceEl) priceEl.value = item.estimatedValue || '';
+    if (descEl)  descEl.value  = item.description || '';
+
+    // Photo download only makes sense if there is a photo
+    const dlBtn = document.getElementById('listing-download-photo-btn');
+    if (dlBtn) dlBtn.style.display = item.photo ? '' : 'none';
+
+    // Restore listing tracker state
+    const listings = item.listings || {};
+    const fb = document.getElementById('listed-facebook');
+    const eb = document.getElementById('listed-ebay');
+    const cl = document.getElementById('listed-craigslist');
+    if (fb) fb.checked = !!listings.facebook;
+    if (eb) eb.checked = !!listings.ebay;
+    if (cl) cl.checked = !!listings.craigslist;
+
+    this.openModal('listing-assistant-modal');
+};
+
+/**
+ * Ask the AI to write marketplace-ready listing copy for the current item.
+ */
+MyEstateAllyApp.prototype.generateListingCopy = async function() {
+    if (!this.listingItem) return;
+    const btn = document.getElementById('generate-listing-btn');
+    const originalHTML = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Writing your listing…';
+    }
+
+    try {
+        const response = await fetch('/api/ai/generate-listing', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item_id: this.listingItem.id })
+        });
+        const data = await response.json();
+
+        if (data.success && data.listing) {
+            const l = data.listing;
+            const titleEl = document.getElementById('listing-title');
+            const priceEl = document.getElementById('listing-price');
+            const descEl  = document.getElementById('listing-description');
+            if (titleEl && l.title) titleEl.value = String(l.title).slice(0, 80);
+            if (priceEl && l.price) priceEl.value = Math.round(Number(l.price)) || '';
+            if (descEl && l.description) descEl.value = l.description;
+            this.showMessage('Listing written! Review it, then copy and paste.', 'success');
+        } else {
+            this.showMessage(data.error || 'Could not generate listing', 'error');
+        }
+    } catch (error) {
+        console.error('Error generating listing:', error);
+        this.showMessage('Could not generate listing. Please try again.', 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalHTML;
+        }
+    }
+};
+
+/**
+ * Copy a listing field's text to the clipboard, with visual feedback.
+ */
+MyEstateAllyApp.prototype.copyListingText = async function(fieldId, btn) {
+    const field = document.getElementById(fieldId);
+    if (!field || !field.value) {
+        this.showMessage('Nothing to copy yet', 'info');
+        return;
+    }
+    try {
+        await navigator.clipboard.writeText(field.value);
+    } catch (e) {
+        // Fallback for older browsers / non-secure contexts
+        field.select();
+        document.execCommand('copy');
+    }
+    if (btn) {
+        const original = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+            btn.innerHTML = original;
+            btn.classList.remove('copied');
+        }, 1600);
+    }
+};
+
+/**
+ * Download the item's photo so it can be attached to a marketplace listing.
+ */
+MyEstateAllyApp.prototype.downloadListingPhoto = function() {
+    if (!this.listingItem || !this.listingItem.photo) {
+        this.showMessage('This item has no photo', 'info');
+        return;
+    }
+    const a = document.createElement('a');
+    a.href = this.listingItem.photo;
+    const safeName = (this.listingItem.name || 'item')
+        .replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+    a.download = `${safeName}_photo.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+};
+
+/**
+ * Open a marketplace's "create listing" page in a new tab.
+ */
+MyEstateAllyApp.prototype.openMarketplace = function(platform) {
+    const urls = {
+        facebook:  'https://www.facebook.com/marketplace/create/item',
+        ebay:      'https://www.ebay.com/sl/sell',
+        craigslist:'https://post.craigslist.org/'
+    };
+    const url = urls[platform];
+    if (url) window.open(url, '_blank', 'noopener');
+};
+
+/**
+ * Persist which marketplaces the item is listed on (saved on the item).
+ */
+MyEstateAllyApp.prototype.saveListingStatus = async function() {
+    if (!this.listingItem) return;
+    const listings = {
+        facebook:   !!document.getElementById('listed-facebook')?.checked,
+        ebay:       !!document.getElementById('listed-ebay')?.checked,
+        craigslist: !!document.getElementById('listed-craigslist')?.checked
+    };
+    try {
+        const response = await fetch(`/api/items/${this.listingItem.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ listings })
+        });
+        const data = await response.json();
+        if (data.success) {
+            this.listingItem.listings = listings;
+            // Keep the in-memory inventory in sync and refresh badges
+            const idx = this.inventory.findIndex(i => i.id === this.listingItem.id);
+            if (idx !== -1) this.inventory[idx].listings = listings;
+            this.updateInventoryDisplay();
+        } else {
+            this.showMessage(data.error || 'Could not save listing status', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving listing status:', error);
+        this.showMessage('Could not save listing status', 'error');
+    }
+};
 

@@ -1409,7 +1409,7 @@ def update_item(item_id):
         item['category'] = data.get('category', item['category'])
         item['description'] = data.get('description', item.get('description', ''))
         item['familyHistory'] = sanitize_string(data.get('familyHistory', item.get('familyHistory', '')), max_length=5000)
-        item['estimatedValue'] = float(data.get('estimatedValue', item.get('estimatedValue', 0)))
+        item['estimatedValue'] = float(data.get('estimatedValue', item.get('estimatedValue') or 0) or 0)
         dest = data.get('destination', item.get('destination', 'keep'))
         if dest not in ALLOWED_DESTINATIONS:
             dest = 'keep'
@@ -1417,6 +1417,14 @@ def update_item(item_id):
         item['destinationDetail'] = sanitize_string(
             data.get('destinationDetail', item.get('destinationDetail', '')), max_length=200
         )
+
+        # Marketplace listing tracker (Facebook Marketplace / eBay / Craigslist)
+        if 'listings' in data and isinstance(data['listings'], dict):
+            allowed_platforms = {'facebook', 'ebay', 'craigslist'}
+            item['listings'] = {
+                k: bool(v) for k, v in data['listings'].items() if k in allowed_platforms
+            }
+
         item['lastModified'] = datetime.now().isoformat()
 
         # Handle photo update
@@ -6678,6 +6686,99 @@ Replace the 0 placeholders with actual numeric USD estimates based on current re
     except Exception as e:
         logger.error(f"Error with AI item lookup: {e}")
         return jsonify({'success': False, 'error': 'AI lookup failed. Please try again.'}), 500
+
+@app.route('/api/ai/generate-listing', methods=['POST'])
+@require_auth
+@limiter.limit("30 per hour")
+def ai_generate_listing():
+    """Use Gemini to write marketplace-ready listing copy (title, description, price)
+    for an inventory item — for posting on Facebook Marketplace, eBay, or Craigslist."""
+    try:
+        if not gemini_api_key:
+            return jsonify({'success': False, 'error': 'AI features not available. Please configure GEMINI_API_KEY.'}), 503
+
+        data = request.get_json()
+        item_id = data.get('item_id', '')
+        if not item_id:
+            return jsonify({'success': False, 'error': 'item_id is required'}), 400
+
+        item = firestore_get_inventory_item(item_id)
+        if not item or item.get('estate_id') != get_current_estate_id():
+            return jsonify({'success': False, 'error': 'Item not found'}), 404
+
+        est_value = item.get('estimatedValue') or 0
+        value_clause = f"The owner's estimated value is ${est_value:,.0f}." if est_value else ""
+
+        prompt = f"""You are an expert at writing online marketplace listings that sell quickly
+(Facebook Marketplace, eBay, Craigslist).
+
+Item name: {item.get('name', 'Unknown item')}
+Category: {item.get('category', 'Other')}
+Condition notes / description: {item.get('description', 'None provided')}
+{value_clause}
+Examine the photo if one is provided.
+
+Write listing copy for this item. Respond with JSON only (no markdown, no code fences):
+{{
+    "title": "catchy, search-friendly listing title, max 75 characters, no ALL CAPS, no emoji",
+    "description": "3-5 short paragraphs: what it is, condition, why it's great, pickup/shipping note placeholder. Friendly and honest tone. Plain text, no markdown.",
+    "price": 0,
+    "keywords": "5-8 comma-separated search keywords buyers would type"
+}}
+
+Replace the 0 with a realistic asking price in whole USD based on the resale market
+(slightly above expected sale price to leave room for negotiation)."""
+
+        parts = [{"text": prompt}]
+        photo_b64 = item.get('photo_data', '')
+        if photo_b64 and len(photo_b64) <= 300000:
+            parts.append({"inline_data": {"mime_type": "image/jpeg", "data": photo_b64}})
+
+        gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_api_key}"
+        gemini_payload = {
+            "contents": [{"parts": parts}],
+            "generationConfig": {
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 1024,
+                "temperature": 0.6
+            }
+        }
+
+        import requests as req_lib
+        resp = req_lib.post(gemini_url, json=gemini_payload, timeout=30)
+        resp.raise_for_status()
+        gemini_data = resp.json()
+
+        candidates = gemini_data.get('candidates', [])
+        if not candidates:
+            logger.error(f"Gemini returned no candidates for listing: {gemini_data}")
+            return jsonify({'success': False, 'error': 'AI returned no result. Please try again.'}), 503
+
+        resp_parts = candidates[0].get('content', {}).get('parts', [])
+        if not resp_parts:
+            return jsonify({'success': False, 'error': 'AI returned empty response. Please try again.'}), 503
+
+        raw_text = resp_parts[0].get('text', '').strip()
+        if raw_text.startswith('```'):
+            raw_text = raw_text.split('```')[1]
+            if raw_text.startswith('json'):
+                raw_text = raw_text[4:]
+        raw_text = raw_text.strip()
+
+        listing = json.loads(raw_text)
+        return jsonify({'success': True, 'listing': listing})
+
+    except req_lib.exceptions.Timeout:
+        return jsonify({'success': False, 'error': 'AI request timed out. Please try again.'}), 504
+    except req_lib.exceptions.RequestException as e:
+        logger.error(f"Gemini API request failed for listing: {e}")
+        return jsonify({'success': False, 'error': 'AI service unavailable. Please try again shortly.'}), 503
+    except (json.JSONDecodeError, KeyError, IndexError) as e:
+        logger.error(f"Failed to parse Gemini listing response: {e}")
+        return jsonify({'success': False, 'error': 'AI returned an unexpected format. Please try again.'}), 500
+    except Exception as e:
+        logger.error(f"Error generating listing: {e}")
+        return jsonify({'success': False, 'error': 'Failed to generate listing. Please try again.'}), 500
 
 @app.route('/api/estate/timeline', methods=['GET', 'POST'])
 @require_auth
