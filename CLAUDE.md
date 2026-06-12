@@ -260,6 +260,20 @@ The SW calls `skipWaiting()` on install so the new version activates immediately
 - **CSS**: `.dashboard-section-title`, `.stat-card--link`, `.dashboard-main-grid` (3fr/2fr, 1-col ≤900px), `.hero-upload-secondary`, `.shortcut-list/.shortcut-item/.shortcut-icon/.shortcut-text/.shortcut-arrow`
 - SW bumped to **v1.1.9**
 
+### Phase 12 — Mobile Upload Fix + Deploy Hygiene (June 2026)
+- **Mobile QR upload 500** was a 3-bug chain:
+  1. `inventory_storage` NameError in the legacy "JSON backup" block (removed; Firestore success now gates the response)
+  2. QR sessions read from in-memory `app.qr_sessions`, which does not survive App Engine instance routing — handler now reads `qr_sessions` from Firestore (where `/api/qr/generate` already saved them); expired sessions get a clear "rescan" error instead of creating orphaned `estate_id: None` items
+  3. **`.gcloudignore` was EMPTY** → every deploy shipped `.env`, `.git`, temp files; the stale pre-rotation OpenAI key in the deployed `.env` overrode Secret Manager (env var wins in `os.environ.get(...) or get_secret(...)`) → 401 on every AI photo analysis
+- **`.env` was tracked in git** despite `.gitignore` (gitignore can't ignore already-tracked files) — removed via `git rm --cached .env`; stays local-only now
+- `analyze_uploaded_photo_with_ai` + `analyze_item_with_ai` now fall back to Secret Manager for the OpenAI key; the SECRET_KEY-as-OpenAI-key fallback (leaked the Flask secret to OpenAI) removed
+- **Known remaining bug**: ~20 legacy `inventory_storage`/`family_storage`/`estate_storage` references still in main.py — each is a NameError 500 when hit; `/api/family/share-link` confirmed broken in prod logs
+
+#### Deploy Lessons (Phase 12)
+- `.gcloudignore` must exist with real content — an empty one uploads EVERYTHING including `.env` and `.git`
+- A deployed `.env` silently beats Secret Manager because of the `os.environ.get(KEY) or get_secret(KEY)` pattern; keep prod keys ONLY in Secret Manager
+- Never store cross-request state in memory (`app.<dict>`) — App Engine routes requests across instances; use the `qr_sessions` Firestore collection pattern
+
 ---
 
 ## Things NOT to Do
