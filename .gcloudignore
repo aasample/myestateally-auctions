@@ -1,2 +1,32 @@
+# Files NOT uploaded to App Engine on `gcloud app deploy`.
+# CRITICAL: .env must never deploy — a stale key in a deployed .env
+# overrides Google Cloud Secret Manager (env var wins in get-key logic)
+# and broke AI photo analysis with a revoked OpenAI key in June 2026.
 
+# Local secrets — production uses Secret Manager exclusively
+.env
+.env.*
 
+# Version control
+.git/
+.gitignore
+.gcloudignore
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Local scratch and tooling junk
+tmpclaude-*
+nul
+*.bat
+check_all_items.py
+check_user.py
+tests/
+requirements-test.txt
+.claude/
+.claudeignore
+
+# Documentation — not needed at runtime
+*.md

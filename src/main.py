@@ -1522,10 +1522,12 @@ def analyze_item_with_ai(item_name, item_description, item_category, item_photo)
     try:
         import openai
         
-        # Get OpenAI API key from environment
-        api_key = os.environ.get('OPENAI_API_KEY') or os.environ.get('SECRET_KEY', '')
-        
-        if not api_key or len(api_key) < 50:
+        # Get OpenAI API key — env var first, then Secret Manager.
+        # (Never fall back to SECRET_KEY: that's the Flask session secret,
+        # and sending it to OpenAI as a bearer token would leak it.)
+        api_key = os.environ.get('OPENAI_API_KEY') or get_secret('OPENAI_API_KEY')
+
+        if not api_key or not api_key.startswith('sk-'):
             logger.warning("OpenAI API key not configured, using basic analysis")
             return None
         
@@ -1600,11 +1602,11 @@ Format your response as JSON with these fields:
 def analyze_uploaded_photo_with_ai(image_data):
     """Use OpenAI Vision API to identify and analyze an uploaded photo"""
     try:
-        # Get OpenAI API key from environment
-        api_key = os.environ.get('OPENAI_API_KEY')
+        # Get OpenAI API key — env var first, then Secret Manager
+        api_key = os.environ.get('OPENAI_API_KEY') or get_secret('OPENAI_API_KEY')
 
         if not api_key:
-            logger.error("OPENAI_API_KEY environment variable not set")
+            logger.error("OPENAI_API_KEY not found in environment or Secret Manager")
             return {
                 'item_name': 'Uploaded Item',
                 'category': 'General',
@@ -2921,15 +2923,26 @@ def mobile_upload_api():
                 'error': f'Failed to process image: {str(ai_error)}'
             }), 500
         
-        # Get estate ID from QR session (stored when QR code was generated)
+        # Get estate ID from the QR session — persisted in Firestore when the
+        # QR code was generated. (Never use in-memory storage for this: App
+        # Engine routes requests across instances, so memory does not survive.)
         estate_id = None
-        if hasattr(app, 'qr_sessions') and session_id in app.qr_sessions:
-            estate_id = app.qr_sessions[session_id].get('estate_id')
+        qr_session = storage_service.get_document('qr_sessions', session_id)
+        if qr_session:
+            estate_id = qr_session.get('estate_id')
             logger.info(f"Using estate_id {estate_id} from QR session {session_id}")
         else:
-            # Fallback: try to get from current session
+            # Fallback: the uploading browser may itself be logged in
             estate_id = get_current_estate_id()
-            logger.warning(f"QR session {session_id} not found, using current estate_id: {estate_id}")
+            logger.warning(f"QR session {session_id} not found in Firestore, current session estate_id: {estate_id}")
+
+        if not estate_id:
+            # Without an estate the item would be orphaned and invisible —
+            # fail clearly instead
+            return jsonify({
+                'success': False,
+                'error': 'This upload session has expired. Please generate a new QR code on your computer and scan it again.'
+            }), 400
 
         # Add the item to inventory storage (like regular upload)
         try:
@@ -2950,7 +2963,8 @@ def mobile_upload_api():
                 'uploadSource': 'mobile',  # Track that this came from mobile upload
                 'sessionId': session_id
             }
-            logger.info(f"Item created: {item}")
+            # Log without photo fields — the base64 blob is huge and floods logs
+            logger.info(f"Item created: {item_id} '{item['name']}' (estate {estate_id})")
         except Exception as item_error:
             logger.error(f"Item creation error: {item_error}")
             return jsonify({
@@ -2958,60 +2972,45 @@ def mobile_upload_api():
                 'error': f'Failed to create item: {str(item_error)}'
             }), 500
         
-        # Store in inventory (ensure it's saved)
+        # Store in inventory — Firestore is the system of record.
+        # (The legacy JSON-file backup was removed in the Firestore migration;
+        # referencing it here caused a NameError 500 on every mobile upload.)
+        firestore_success = False
         try:
-            # Try Firestore first
-            firestore_success = False
-            try:
-                # Check photo size before saving to Firestore (1MB limit)
-                # Note: Images should already be compressed to ~800KB, but check as safety net
-                photo_data_size = len(item.get('photo_data', '')) if item.get('photo_data') else 0
-                logger.info(f"Item photo_data size: {photo_data_size} bytes ({photo_data_size / 1024:.2f} KB)")
+            # Check photo size before saving to Firestore (1MB document limit).
+            # Images should already be compressed to ~800KB, but check as safety net.
+            photo_data_size = len(item.get('photo_data', '')) if item.get('photo_data') else 0
+            logger.info(f"Item photo_data size: {photo_data_size} bytes ({photo_data_size / 1024:.2f} KB)")
 
-                if photo_data_size > 900000:  # 900KB safety margin
-                    logger.warning(f"Photo still too large for Firestore after compression ({photo_data_size / 1024:.2f} KB), saving without photo_data")
-                    # Create a copy without the large photo_data field
-                    item_for_firestore = {k: v for k, v in item.items() if k != 'photo_data'}
-                    firestore_success = firestore_add_inventory_item(item_for_firestore)
-                else:
-                    logger.info(f"Photo size OK for Firestore ({photo_data_size / 1024:.2f} KB), saving with photo_data")
-                    firestore_success = firestore_add_inventory_item(item)
+            if photo_data_size > 900000:  # 900KB safety margin
+                logger.warning(f"Photo still too large for Firestore after compression ({photo_data_size / 1024:.2f} KB), saving without photo_data")
+                item_for_firestore = {k: v for k, v in item.items() if k != 'photo_data'}
+                firestore_success = firestore_add_inventory_item(item_for_firestore)
+            else:
+                firestore_success = firestore_add_inventory_item(item)
 
-                if firestore_success:
-                    logger.info(f"Item saved to Firestore: {item_id}")
-                else:
-                    logger.error(f"firestore_add_inventory_item returned False for item {item_id}")
-            except Exception as firestore_error:
-                logger.error(f"Firestore save failed with exception: {firestore_error}")
-                import traceback
-                logger.error(f"Traceback: {traceback.format_exc()}")
-            
-            # Always save to JSON file as backup
-            inventory_storage[item_id] = item
-            save_storage('inventory.json', inventory_storage)
-            logger.info(f"Item saved to JSON storage: {item_id}")
-            
-        except Exception as storage_error:
-            logger.error(f"Storage error: {storage_error}")
-            # Continue without storage for now
-        
-        # Debug logging
-        logger.info(f"Mobile upload: Added item {item_id} to inventory. Total items: {len(inventory_storage)}")
-        logger.info(f"Photo URL: {ai_result['photo_url']}")
-        logger.info(f"File path: {file_path}")
-        
+            if firestore_success:
+                logger.info(f"Item saved to Firestore: {item_id}")
+            else:
+                logger.error(f"firestore_add_inventory_item returned False for item {item_id}")
+        except Exception as firestore_error:
+            logger.error(f"Firestore save failed with exception: {firestore_error}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+
+        if not firestore_success:
+            return jsonify({
+                'success': False,
+                'error': 'Your photo was received but could not be saved. Please try again.'
+            }), 500
+
+        logger.info(f"Mobile upload complete: item {item_id} saved to estate {estate_id}")
+
         return jsonify({
             'success': True,
             'analysis': ai_result,
             'item': item,
-            'message': 'Photo uploaded and added to inventory successfully! You can now close this page.',
-            'debug': {
-                'item_id': item_id,
-                'total_items': len(inventory_storage),
-                'photo_url': ai_result['photo_url'],
-                'file_path': file_path,
-                'upload_dir': upload_dir if 'upload_dir' in locals() else 'unknown'
-            }
+            'message': 'Photo uploaded and added to inventory successfully! You can now close this page.'
         })
         
     except Exception as e:
