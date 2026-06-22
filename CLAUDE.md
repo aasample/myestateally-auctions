@@ -274,6 +274,59 @@ The SW calls `skipWaiting()` on install so the new version activates immediately
 - A deployed `.env` silently beats Secret Manager because of the `os.environ.get(KEY) or get_secret(KEY)` pattern; keep prod keys ONLY in Secret Manager
 - Never store cross-request state in memory (`app.<dict>`) — App Engine routes requests across instances; use the `qr_sessions` Firestore collection pattern
 
+### Phase 13 — Complete Visual Redesign: Warm Sage & Cream Palette (June 2026)
+**Objective**: Redesign for mature audience (ages 55–75); replace navy+gold with warm sage/cream; improve readability and approachability.
+
+#### Color Palette (new CSS variables throughout)
+- `--ea-cream: #f8f5ee` — page background, button text
+- `--ea-linen: #f0ece2` — nav, hero, card backgrounds
+- `--ea-oat: #eae5d9` — founder quote background
+- `--ea-stone: #d4cfc4` — borders
+- `--ea-sage-light: #dce8d8` — badges, highlights
+- `--ea-sage: #4a6741` — primary buttons, icons, section badges
+- `--ea-forest: #3b5a33` — hover states, button text on light bg
+- `--ea-bark: #2c2420` — footer, headings, text on cream
+- `--ea-warm-gray: #5a5248` — body text
+- `--ea-warm-gray-light: #8a847a` — secondary text, captions
+
+Replaces navy (#0a1628) + gold (#c9a84c). Updated CSS variables in both `src/templates/landing.html` inline styles and glamour theme section in `src/static/styles.css`.
+
+#### Landing Page Changes (src/templates/landing.html)
+- **Trust badges**: moved above h1, styled as pill badges (sage-light bg, forest text, stone border)
+- **Hero headline**: "Finally — a way to get organized before, during, or after the hardest days."
+- **Hero subheadline**: "AI-powered estate inventory, document storage, and family sharing — built by someone who learned the hard way"
+- **How It Works section**: new 3-card module below story; cards: (1) Take a photo, (2) Invite family, (3) Move forward, each with circular numbered badge (sage)
+- **Founder Quote section**: extracted from story as standalone visual block; features large serif quotation mark (sage), italic serif body text, oat background, max-width 520px
+- **CTA Footer**: sage background, cream button with forest text
+- **Nav logo**: "Estate" portion in sage color
+- **Typography**: 18px base font size (up from 16px), 1.8 line-height on body
+- **All section backgrounds**: cream, with linen/sage-light card backgrounds
+
+#### App-Wide Changes (src/static/styles.css)
+- **Glamour theme tokens** (lines ~6327): replaced navy+gold with sage+cream
+  - `--navy: #2c2420` (bark — dark text/backgrounds)
+  - `--navy-mid: #3a3530` (slightly lighter bark for gradients)
+  - `--navy-light: #f0ece2` (linen — light accents)
+  - `--gold: #4a6741` (sage — primary/accent color)
+  - `--gold-light: #dce8d8` (sage-light — badges)
+  - `--gold-dark: #3b5a33` (forest — hover/secondary)
+- **Root CSS variables** (lines ~7-32):
+  - `--primary-color: #4a6741` (was #2563eb)
+  - `--bg-primary: #f8f5ee` (was #fefefe)
+  - `--text-primary: #2c2420` (was #0f172a)
+  - `--text-secondary: #5a5248` (was #334155)
+- **Result**: buttons, badges, icons, alerts, and all interactive elements now use sage/forest; backgrounds are cream/linen; text is warm-gray
+- **Dark mode**: overrides in landing.html use new palette regardless of OS preference (warm sage/cream, not dark navy)
+
+#### Service Worker
+- Bumped to **v1.2.0** to flush cached CSS/JS from browsers
+
+#### Mobile Responsiveness
+- Trust bar items flex-wrap on ≤768px, centered layout preserved
+- How It Works cards: 3-col on desktop → 1-col on mobile
+- Quote block: max-width 520px scales to container ≤768px
+- All font sizes, spacing, and padding adjust appropriately
+
 ---
 
 ## Things NOT to Do
