@@ -54,27 +54,29 @@
         }
 
         :root {
-            --primary-color: #2563eb;
-            --primary-dark: #1e40af;
-            --text-dark: #1f2937;
-            --text-medium: #4b5563;
-            --text-light: #6b7280;
-            --bg-light: #f9fafb;
-            --bg-lighter: #f3f4f6;
-            --white: #ffffff;
-            --border: #e5e7eb;
+            --ea-cream: #f8f5ee;
+            --ea-linen: #f0ece2;
+            --ea-oat: #eae5d9;
+            --ea-stone: #d4cfc4;
+            --ea-sage-light: #dce8d8;
+            --ea-sage: #4a6741;
+            --ea-forest: #3b5a33;
+            --ea-bark: #2c2420;
+            --ea-warm-gray: #5a5248;
+            --ea-warm-gray-light: #8a847a;
         }
 
         body {
             font-family: 'Inter', sans-serif;
-            color: var(--text-dark);
-            line-height: 1.7;
-            background: var(--white);
+            color: var(--ea-warm-gray);
+            line-height: 1.8;
+            background: var(--ea-cream);
+            font-size: 18px;
         }
 
         /* Header */
         .header {
-            background: var(--white);
+            background: var(--ea-linen);
             padding: 1.25rem 0;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
             position: sticky;
@@ -100,12 +102,13 @@
             gap: 0.5rem;
             font-size: 1.5rem;
             font-weight: 700;
-            color: var(--primary-color);
+            color: var(--ea-bark);
             text-decoration: none;
         }
 
         .logo i {
             font-size: 1.75rem;
+            color: var(--ea-sage);
         }
 
         .btn {
@@ -123,19 +126,30 @@
         }
 
         .btn-primary {
-            background: var(--primary-color);
-            color: white;
+            background: var(--ea-sage);
+            color: var(--ea-cream);
         }
 
         .btn-primary:hover {
-            background: var(--primary-dark);
+            background: var(--ea-forest);
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+            box-shadow: 0 4px 12px rgba(74, 103, 65, 0.3);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--ea-sage);
+            border: 2px solid var(--ea-sage);
+        }
+
+        .btn-secondary:hover {
+            background: var(--ea-sage-light);
+            transform: translateY(-1px);
         }
 
         /* Hero Section */
         .hero {
-            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            background: var(--ea-linen);
             padding: 5rem 0;
             text-align: center;
         }
@@ -143,14 +157,14 @@
         .hero h1 {
             font-size: 3rem;
             font-weight: 800;
-            color: var(--text-dark);
+            color: var(--ea-bark);
             margin-bottom: 1.5rem;
-            line-height: 1.2;
+            line-height: 1.35;
         }
 
         .hero .subtitle {
             font-size: 1.5rem;
-            color: var(--text-medium);
+            color: var(--ea-warm-gray);
             margin-bottom: 2.5rem;
             font-weight: 400;
         }
@@ -162,7 +176,7 @@
         /* Story Section */
         .story {
             padding: 5rem 0;
-            background: var(--white);
+            background: var(--ea-cream);
         }
 
         .story-content {
@@ -173,32 +187,34 @@
         .story h2 {
             font-size: 2.5rem;
             font-weight: 700;
-            color: var(--text-dark);
+            color: var(--ea-bark);
             margin-bottom: 2rem;
             text-align: center;
+            line-height: 1.35;
         }
 
         .story-text {
             font-size: 1.125rem;
-            color: var(--text-medium);
+            color: var(--ea-warm-gray);
             line-height: 1.8;
             margin-bottom: 1.5rem;
         }
 
         .story-highlight {
-            background: var(--bg-light);
-            border-left: 4px solid var(--primary-color);
-            padding: 1.5rem 2rem;
+            background: transparent;
+            border: none;
+            padding: 0;
             margin: 2rem 0;
-            font-size: 1.25rem;
-            font-style: italic;
-            color: var(--text-dark);
+            font-size: 1rem;
+            font-style: normal;
+            color: var(--ea-warm-gray);
+            display: none;
         }
 
         /* Problem Section */
         .problem {
             padding: 5rem 0;
-            background: var(--bg-light);
+            background: var(--ea-cream);
         }
 
         .problem h2 {
@@ -206,6 +222,8 @@
             font-weight: 700;
             text-align: center;
             margin-bottom: 3rem;
+            color: var(--ea-bark);
+            line-height: 1.35;
         }
 
         .problem-grid {
@@ -216,33 +234,34 @@
         }
 
         .problem-card {
-            background: var(--white);
+            background: var(--ea-linen);
             padding: 2rem;
             border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            border: 1px solid var(--ea-stone);
+            box-shadow: none;
         }
 
         .problem-card i {
             font-size: 2.5rem;
-            color: var(--primary-color);
+            color: var(--ea-sage);
             margin-bottom: 1rem;
         }
 
         .problem-card h3 {
             font-size: 1.5rem;
             margin-bottom: 1rem;
-            color: var(--text-dark);
+            color: var(--ea-bark);
         }
 
         .problem-card p {
-            color: var(--text-medium);
+            color: var(--ea-warm-gray);
             font-size: 1rem;
         }
 
         /* Solution Section */
         .solution {
             padding: 5rem 0;
-            background: var(--white);
+            background: var(--ea-cream);
         }
 
         .solution h2 {
@@ -250,12 +269,14 @@
             font-weight: 700;
             text-align: center;
             margin-bottom: 1rem;
+            color: var(--ea-bark);
+            line-height: 1.35;
         }
 
         .solution .intro {
             text-align: center;
             font-size: 1.25rem;
-            color: var(--text-medium);
+            color: var(--ea-warm-gray);
             max-width: 700px;
             margin: 0 auto 3rem;
         }
@@ -274,31 +295,31 @@
         .feature-icon {
             width: 80px;
             height: 80px;
-            background: linear-gradient(135deg, var(--primary-color), #7c3aed);
+            background: var(--ea-sage);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             margin: 0 auto 1.5rem;
-            color: white;
+            color: var(--ea-cream);
             font-size: 2rem;
         }
 
         .feature h3 {
             font-size: 1.5rem;
             margin-bottom: 1rem;
-            color: var(--text-dark);
+            color: var(--ea-bark);
         }
 
         .feature p {
-            color: var(--text-medium);
+            color: var(--ea-warm-gray);
             font-size: 1rem;
         }
 
         /* Trust Section */
         .trust {
             padding: 5rem 0;
-            background: var(--bg-lighter);
+            background: var(--ea-cream);
         }
 
         .trust-content {
@@ -311,6 +332,8 @@
             font-size: 2.5rem;
             font-weight: 700;
             margin-bottom: 2rem;
+            color: var(--ea-bark);
+            line-height: 1.35;
         }
 
         .trust-points {
@@ -321,33 +344,35 @@
         }
 
         .trust-point {
-            background: var(--white);
+            background: var(--ea-linen);
             padding: 2rem;
             border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            border: 1px solid var(--ea-stone);
+            box-shadow: none;
         }
 
         .trust-point i {
             font-size: 2rem;
-            color: var(--primary-color);
+            color: var(--ea-sage);
             margin-bottom: 1rem;
         }
 
         .trust-point h3 {
             font-size: 1.25rem;
             margin-bottom: 0.75rem;
+            color: var(--ea-bark);
         }
 
         .trust-point p {
-            color: var(--text-medium);
+            color: var(--ea-warm-gray);
             font-size: 0.95rem;
         }
 
         /* CTA Section */
         .cta-section {
             padding: 5rem 0;
-            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
-            color: white;
+            background: var(--ea-sage);
+            color: var(--ea-cream);
             text-align: center;
         }
 
@@ -355,52 +380,54 @@
             font-size: 2.5rem;
             font-weight: 700;
             margin-bottom: 1rem;
+            color: var(--ea-cream);
+            line-height: 1.35;
         }
 
         .cta-section p {
             font-size: 1.25rem;
             margin-bottom: 2rem;
-            opacity: 0.95;
+            color: var(--ea-linen);
         }
 
         .btn-white {
-            background: white;
-            color: var(--primary-color);
+            background: var(--ea-cream);
+            color: var(--ea-forest);
         }
 
         .btn-white:hover {
-            background: var(--bg-light);
+            background: var(--ea-linen);
             transform: translateY(-2px);
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
         }
 
         /* Footer */
         .footer {
-            background: var(--text-dark);
-            color: white;
+            background: var(--ea-bark);
+            color: var(--ea-cream);
             padding: 2rem 0;
             text-align: center;
         }
 
         .footer p {
             margin: 0.5rem 0;
-            opacity: 0.8;
+            opacity: 0.85;
         }
 
         /* CTA Fine Print */
         .cta-fine-print {
             margin-top: 0.85rem;
             font-size: 0.825rem;
-            color: var(--text-light);
+            color: var(--ea-warm-gray-light);
             letter-spacing: 0.01em;
         }
 
-        /* Trust Bar — thin social-proof strip below hero */
+        /* Trust Bar — pill badges above hero */
         .trust-bar {
-            background: #f1f5f9;
-            border-top: 1px solid #e2e8f0;
-            border-bottom: 1px solid #e2e8f0;
-            padding: 0.875rem 0;
+            background: transparent;
+            border: none;
+            padding: 0 0 1.5rem 0;
+            margin-top: -1.5rem;
         }
 
         .trust-bar-items {
@@ -408,7 +435,7 @@
             flex-wrap: wrap;
             justify-content: center;
             align-items: center;
-            gap: 0.5rem 2rem;
+            gap: 0.75rem;
         }
 
         .trust-bar-items span {
@@ -417,12 +444,16 @@
             gap: 0.4rem;
             font-size: 0.8125rem;
             font-weight: 600;
-            color: var(--text-medium);
+            color: var(--ea-forest);
             white-space: nowrap;
+            background: var(--ea-sage-light);
+            border: 1px solid var(--ea-stone);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
         }
 
         .trust-bar-items span i {
-            color: var(--primary-color);
+            color: var(--ea-forest);
             font-size: 0.75rem;
         }
 
@@ -436,15 +467,105 @@
         }
 
         .footer-links a {
-            color: rgba(255, 255, 255, 0.65);
+            color: rgba(248, 245, 238, 0.65);
             text-decoration: none;
             font-size: 0.875rem;
             transition: color 0.2s;
         }
 
         .footer-links a:hover {
-            color: rgba(255, 255, 255, 0.95);
+            color: rgba(248, 245, 238, 0.95);
             text-decoration: underline;
+        }
+
+        /* How It Works Section */
+        .how-it-works {
+            padding: 5rem 0;
+            background: var(--ea-cream);
+        }
+
+        .how-it-works-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2.5rem;
+            margin-top: 2rem;
+        }
+
+        .how-it-works-card {
+            background: var(--ea-linen);
+            padding: 2.5rem 2rem;
+            border-radius: 12px;
+            border: 1px solid var(--ea-stone);
+            text-align: center;
+            position: relative;
+        }
+
+        .step-badge {
+            width: 60px;
+            height: 60px;
+            background: var(--ea-sage);
+            color: var(--ea-cream);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin: 0 auto 1.5rem;
+        }
+
+        .how-it-works-card h3 {
+            font-size: 1.5rem;
+            color: var(--ea-bark);
+            margin-bottom: 1rem;
+        }
+
+        .how-it-works-card p {
+            color: var(--ea-warm-gray);
+            font-size: 1rem;
+            line-height: 1.8;
+        }
+
+        /* Founder Quote Section */
+        .founder-quote {
+            padding: 5rem 0;
+            background: var(--ea-cream);
+        }
+
+        .quote-block {
+            max-width: 520px;
+            margin: 0 auto;
+            background: var(--ea-oat);
+            padding: 3rem 2.5rem;
+            border-radius: 12px;
+            text-align: center;
+            position: relative;
+        }
+
+        .quote-mark {
+            font-size: 4rem;
+            color: var(--ea-sage);
+            line-height: 1;
+            margin-bottom: 1rem;
+            font-family: Georgia, serif;
+            font-weight: bold;
+            display: block;
+        }
+
+        .quote-text {
+            font-size: 1.25rem;
+            font-style: italic;
+            color: var(--ea-bark);
+            line-height: 1.8;
+            margin-bottom: 1.5rem;
+            font-family: Georgia, serif;
+        }
+
+        .quote-attribution {
+            font-size: 1rem;
+            color: var(--ea-warm-gray-light);
+            font-weight: 600;
+            margin: 0;
         }
 
         /* Responsive */
@@ -469,8 +590,16 @@
                 padding: 3rem 0;
             }
 
-            .story, .problem, .solution, .trust, .cta-section {
+            .story, .problem, .solution, .trust, .cta-section, .how-it-works, .founder-quote {
                 padding: 3rem 0;
+            }
+
+            .how-it-works-grid, .trust-bar-items {
+                flex-direction: column;
+            }
+
+            .how-it-works-card {
+                max-width: 100%;
             }
 
             /* On mobile, hide "Get Started Free" from nav — the hero has it covered.
@@ -567,100 +696,107 @@
         }
 
         /* ── Dark-mode overrides ─────────────────────────────────────────
-           styles.css has aggressive dark-mode !important rules (body white,
-           all .btn white) that override our inline styles and lower-specificity
-           rules.  We fight back by prefixing every selector with
-           "body.landing-page" which gives specificity 0,1,1,0 vs
-           styles.css's 0,0,1,0 — higher specificity always wins, even
-           against !important of equal or lower specificity. */
+           The landing page uses a warm sage/cream palette regardless of OS
+           dark mode. We override any aggressive dark-mode rules by prefixing
+           every selector with "body.landing-page" (specificity 0,1,1,0). */
         @media (prefers-color-scheme: dark) {
-            /* Keep the page light — this is a brand landing page, not a dark app */
             body.landing-page {
-                background-color: #ffffff !important;
-                color: #1f2937 !important;
+                background-color: var(--ea-cream) !important;
+                color: var(--ea-warm-gray) !important;
+                font-size: 18px !important;
             }
 
-            /* Header — white bar */
             body.landing-page .header {
-                background: #ffffff !important;
-                box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12) !important;
+                background: var(--ea-linen) !important;
             }
-            body.landing-page .logo,
-            body.landing-page .logo i { color: #2563eb !important; }
+            body.landing-page .logo { color: var(--ea-bark) !important; }
+            body.landing-page .logo i { color: var(--ea-sage) !important; }
 
-            /* ── Nav buttons ── */
-            /* "Log In" — outline style: blue border, blue text, transparent bg */
+            body.landing-page .btn-primary {
+                background: var(--ea-sage) !important;
+                color: var(--ea-cream) !important;
+            }
             body.landing-page .btn-secondary {
                 background: transparent !important;
-                color: #2563eb !important;
-                border-color: #2563eb !important;
+                color: var(--ea-sage) !important;
+                border-color: var(--ea-sage) !important;
             }
-            /* "Get Started Free" (nav) + "Start Organizing Free" (hero) */
-            body.landing-page .btn-primary {
-                background: #2563eb !important;
-                color: #ffffff !important;
-            }
-            /* Bottom-CTA white button */
             body.landing-page .btn-white {
-                background: #ffffff !important;
-                color: #2563eb !important;
+                background: var(--ea-cream) !important;
+                color: var(--ea-forest) !important;
             }
 
-            /* ── Hero ── */
             body.landing-page .hero {
-                background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%) !important;
+                background: var(--ea-linen) !important;
             }
-            body.landing-page .hero h1       { color: #1f2937 !important; }
-            body.landing-page .hero .subtitle { color: #4b5563 !important; }
-            body.landing-page .hero .cta > p  { color: #4b5563 !important; opacity: 1 !important; }
-            body.landing-page .hero .cta > p a { color: #1f2937 !important; }
+            body.landing-page .hero h1 { color: var(--ea-bark) !important; }
+            body.landing-page .hero .subtitle { color: var(--ea-warm-gray) !important; }
 
-            /* ── Story ── */
-            body.landing-page .story         { background: #ffffff !important; }
-            body.landing-page .story h2      { color: #1f2937 !important; }
-            body.landing-page .story-text    { color: #4b5563 !important; }
-            body.landing-page .story-highlight {
-                background: #f9fafb !important;
-                color: #1f2937 !important;
+            body.landing-page .trust-bar-items span {
+                background: var(--ea-sage-light) !important;
+                color: var(--ea-forest) !important;
+                border-color: var(--ea-stone) !important;
             }
+            body.landing-page .trust-bar-items span i { color: var(--ea-forest) !important; }
 
-            /* ── Problem ── */
-            body.landing-page .problem       { background: #f9fafb !important; }
-            body.landing-page .problem h2    { color: #1f2937 !important; }
-            body.landing-page .problem-card  { background: #ffffff !important; }
-            body.landing-page .problem-card h3 { color: #1f2937 !important; }
-            body.landing-page .problem-card p  { color: #4b5563 !important; }
+            body.landing-page .story { background: var(--ea-cream) !important; }
+            body.landing-page .story h2 { color: var(--ea-bark) !important; }
+            body.landing-page .story-text { color: var(--ea-warm-gray) !important; }
 
-            /* ── Solution ── */
-            body.landing-page .solution      { background: #ffffff !important; }
-            body.landing-page .solution h2   { color: #1f2937 !important; }
-            body.landing-page .solution .intro { color: #4b5563 !important; }
-            body.landing-page .feature h3    { color: #1f2937 !important; }
-            body.landing-page .feature p     { color: #4b5563 !important; }
-
-            /* ── Trust ── */
-            body.landing-page .trust         { background: #f3f4f6 !important; }
-            body.landing-page .trust h2      { color: #1f2937 !important; }
-            body.landing-page .trust-point   { background: #ffffff !important; }
-            body.landing-page .trust-point h3 { color: #1f2937 !important; }
-            body.landing-page .trust-point p  { color: #4b5563 !important; }
-
-            /* ── Trust bar ── */
-            body.landing-page .trust-bar {
-                background: #e8edf2 !important;
-                border-color: #d1d9e0 !important;
+            body.landing-page .problem { background: var(--ea-cream) !important; }
+            body.landing-page .problem h2 { color: var(--ea-bark) !important; }
+            body.landing-page .problem-card {
+                background: var(--ea-linen) !important;
+                border-color: var(--ea-stone) !important;
             }
-            body.landing-page .trust-bar-items span { color: #374151 !important; }
-            body.landing-page .trust-bar-items span i { color: #2563eb !important; }
+            body.landing-page .problem-card h3 { color: var(--ea-bark) !important; }
+            body.landing-page .problem-card p { color: var(--ea-warm-gray) !important; }
 
-            /* ── CTA fine print ── */
-            body.landing-page .cta-fine-print { color: #4b5563 !important; }
+            body.landing-page .solution { background: var(--ea-cream) !important; }
+            body.landing-page .solution h2 { color: var(--ea-bark) !important; }
+            body.landing-page .solution .intro { color: var(--ea-warm-gray) !important; }
+            body.landing-page .feature h3 { color: var(--ea-bark) !important; }
+            body.landing-page .feature p { color: var(--ea-warm-gray) !important; }
 
-            /* ── Footer ── */
-            body.landing-page .footer        { background: #1f2937 !important; }
-            body.landing-page .footer p      { color: rgba(255,255,255,0.85) !important; }
-            body.landing-page .footer-links a { color: rgba(255,255,255,0.65) !important; }
-            body.landing-page .footer-links a:hover { color: rgba(255,255,255,0.95) !important; }
+            body.landing-page .trust { background: var(--ea-cream) !important; }
+            body.landing-page .trust h2 { color: var(--ea-bark) !important; }
+            body.landing-page .trust-point {
+                background: var(--ea-linen) !important;
+                border-color: var(--ea-stone) !important;
+            }
+            body.landing-page .trust-point h3 { color: var(--ea-bark) !important; }
+            body.landing-page .trust-point p { color: var(--ea-warm-gray) !important; }
+
+            body.landing-page .cta-section {
+                background: var(--ea-sage) !important;
+                color: var(--ea-cream) !important;
+            }
+            body.landing-page .cta-section h2 { color: var(--ea-cream) !important; }
+            body.landing-page .cta-section p { color: var(--ea-linen) !important; }
+
+            body.landing-page .footer {
+                background: var(--ea-bark) !important;
+                color: var(--ea-cream) !important;
+            }
+            body.landing-page .footer p { color: rgba(248, 245, 238, 0.85) !important; }
+            body.landing-page .footer-links a { color: rgba(248, 245, 238, 0.65) !important; }
+            body.landing-page .footer-links a:hover { color: rgba(248, 245, 238, 0.95) !important; }
+
+            /* ── How It Works ── */
+            body.landing-page .how-it-works { background: var(--ea-cream) !important; }
+            body.landing-page .how-it-works-card {
+                background: var(--ea-linen) !important;
+                border-color: var(--ea-stone) !important;
+            }
+            body.landing-page .how-it-works-card h3 { color: var(--ea-bark) !important; }
+            body.landing-page .how-it-works-card p { color: var(--ea-warm-gray) !important; }
+
+            /* ── Founder Quote ── */
+            body.landing-page .founder-quote { background: var(--ea-cream) !important; }
+            body.landing-page .quote-block { background: var(--ea-oat) !important; }
+            body.landing-page .quote-mark { color: var(--ea-sage) !important; }
+            body.landing-page .quote-text { color: var(--ea-bark) !important; }
+            body.landing-page .quote-attribution { color: var(--ea-warm-gray-light) !important; }
         }
     </style>
 </head>
@@ -688,33 +824,31 @@
     <!-- Hero Section -->
     <section class="hero">
         <div class="container">
-            <h1>Estate Management &amp; Downsizing, Made Simple</h1>
-            <p class="subtitle">AI-powered inventory, family sharing, and document storage—<br>created by someone who learned the hard way</p>
+            <!-- Trust Bar — pill badges above headline -->
+            <div class="trust-bar">
+                <div class="trust-bar-items">
+                    <span><i class="fas fa-lock"></i> 100% Private</span>
+                    <span><i class="fas fa-robot"></i> AI-Powered</span>
+                    <span><i class="fas fa-clock"></i> Saves 200+ Hours</span>
+                    <span><i class="fas fa-star"></i> Free to Start</span>
+                    <span><i class="fas fa-ban"></i> We Never Sell Your Data</span>
+                </div>
+            </div>
+
+            <h1>Finally — a way to get organized before, during, or after the hardest days.</h1>
+            <p class="subtitle">AI-powered estate inventory, document storage, and family sharing — built by someone who learned the hard way</p>
             <div class="cta">
                 <a href="javascript:app.openAuthModal()" class="btn btn-primary btn-large">
                     Start Organizing Free <i class="fas fa-arrow-right"></i>
                 </a>
                 <p class="cta-fine-print">No credit card &nbsp;·&nbsp; No upsell &nbsp;·&nbsp; Your data stays yours</p>
-                <p style="margin-top: 0.75rem; font-size: 1.1rem; color: var(--text-medium);">
+                <p style="margin-top: 0.75rem; font-size: 1.1rem; color: var(--ea-warm-gray);">
                     Already have an account?
-                    <a href="javascript:app.openAuthModal()" style="color: var(--text-dark); font-weight: 700; text-decoration: underline;">Log In</a>
+                    <a href="javascript:app.openAuthModal()" style="color: var(--ea-bark); font-weight: 700; text-decoration: underline;">Log In</a>
                 </p>
             </div>
         </div>
     </section>
-
-    <!-- Trust Bar -->
-    <div class="trust-bar">
-        <div class="container">
-            <div class="trust-bar-items">
-                <span><i class="fas fa-lock"></i> 100% Private</span>
-                <span><i class="fas fa-robot"></i> AI-Powered</span>
-                <span><i class="fas fa-clock"></i> Saves 200+ Hours</span>
-                <span><i class="fas fa-star"></i> Free to Start</span>
-                <span><i class="fas fa-ban"></i> We Never Sell Your Data</span>
-            </div>
-        </div>
-    </div>
 
     <!-- Story Section -->
     <section class="story">
@@ -751,6 +885,44 @@
                 <p class="story-text" style="font-weight: 600; text-align: center; margin-top: 2rem;">
                     This is the tool I wish I'd had. Now it's here for you.
                 </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works Section -->
+    <section class="how-it-works">
+        <div class="container">
+            <h2 style="text-align: center; font-size: 2.5rem; font-weight: 700; color: var(--ea-bark); margin-bottom: 3rem; line-height: 1.35;">How it works — 3 simple steps</h2>
+
+            <div class="how-it-works-grid">
+                <div class="how-it-works-card">
+                    <div class="step-badge">1</div>
+                    <h3>Take a photo</h3>
+                    <p>Snap any item. AI identifies it, estimates value, and writes a description automatically.</p>
+                </div>
+
+                <div class="how-it-works-card">
+                    <div class="step-badge">2</div>
+                    <h3>Invite family</h3>
+                    <p>Share access so loved ones can view items and note what matters to them — before tension rises.</p>
+                </div>
+
+                <div class="how-it-works-card">
+                    <div class="step-badge">3</div>
+                    <h3>Move forward</h3>
+                    <p>Every decision is timestamped. Documents are stored. Everyone has peace of mind.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Founder Quote Section -->
+    <section class="founder-quote">
+        <div class="container">
+            <div class="quote-block">
+                <div class="quote-mark">"</div>
+                <p class="quote-text">I was managing two estates, caring for a newborn, working full-time, and trying to support my sister. This is the tool I wish I'd had.</p>
+                <p class="quote-attribution">— Alicia, founder of MyEstateAlly</p>
             </div>
         </div>
     </section>
@@ -865,7 +1037,7 @@
     <section class="cta-section">
         <div class="container">
             <h2>Start Organizing Today</h2>
-            <p>Whether you're closing an estate or downsizing, MyEstateAlly is here to help ease the burden.</p>
+            <p style="color: var(--ea-linen);">Whether you're closing an estate or downsizing, MyEstateAlly is here to help ease the burden.</p>
             <a href="javascript:app.openAuthModal()" class="btn btn-white btn-large">
                 Get Started Free <i class="fas fa-arrow-right"></i>
             </a>
