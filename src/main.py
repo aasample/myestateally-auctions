@@ -6690,14 +6690,39 @@ Replace the 0 placeholders with actual numeric USD estimates based on current re
             return jsonify({'success': False, 'error': 'AI returned empty response. Please try again.'}), 503
 
         raw_text = parts[0].get('text', '').strip()
-        # Strip markdown fences Gemini sometimes wraps around JSON
-        if raw_text.startswith('```'):
-            raw_text = raw_text.split('```')[1]
-            if raw_text.startswith('json'):
-                raw_text = raw_text[4:]
-        raw_text = raw_text.strip()
 
-        ai_response = json.loads(raw_text)
+        # Strip markdown fences Gemini sometimes wraps around JSON, even with responseMimeType set
+        # Handle various formats: ```json...```, ```...```, or raw JSON
+        original_text = raw_text
+        if raw_text.startswith('```'):
+            # Remove opening backticks and optional 'json' language tag
+            lines = raw_text.split('\n')
+            if lines[0].startswith('```'):
+                lines = lines[1:]  # Skip the opening ``` line
+            # Remove closing backticks from the end
+            if lines and lines[-1].strip() == '```':
+                lines = lines[:-1]
+            raw_text = '\n'.join(lines).strip()
+
+        # If we still can't parse, log the raw response for debugging
+        logger.info(f"AI Lookup raw response (first 200 chars): {original_text[:200]}")
+
+        try:
+            ai_response = json.loads(raw_text)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse Gemini response: {e}")
+            logger.error(f"Raw text: {raw_text[:500]}")
+            # Try to find JSON object in the text as a fallback
+            import re
+            json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+            if json_match:
+                try:
+                    ai_response = json.loads(json_match.group())
+                    logger.info("Recovered JSON from regex match")
+                except json.JSONDecodeError:
+                    raise
+            else:
+                raise
         return jsonify({'success': True, 'lookup': ai_response})
 
     except req_lib.exceptions.Timeout:
