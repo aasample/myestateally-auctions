@@ -2860,7 +2860,7 @@ def mobile_upload_api():
             photo_data = None
             if file_path and os.path.exists(file_path):
                 try:
-                    # Compress image to meet Firestore size limits (max 800KB)
+                    # Compress image for Firestore storage (max 800KB)
                     logger.info(f"Compressing image from: {file_path}")
                     photo_data = compress_image_to_base64(file_path, max_size_kb=800)
                     photo_url = f"data:image/jpeg;base64,{photo_data}"
@@ -2868,18 +2868,44 @@ def mobile_upload_api():
                     size_kb = len(photo_data) / 1024
                     logger.info(f"Image compressed to base64, size: {size_kb:.2f}KB ({len(photo_data)} chars)")
 
-                    # Perform AI analysis on the uploaded photo
+                    # Compress smaller version for AI analysis (max 200KB) — faster API response
+                    # This keeps the total request time under 60s App Engine timeout
+                    logger.info(f"Compressing smaller image for AI analysis: {filename}")
+                    ai_photo_data = compress_image_to_base64(file_path, max_size_kb=200, max_dimension=800)
+                    ai_size_kb = len(ai_photo_data) / 1024
+                    logger.info(f"AI image size: {ai_size_kb:.2f}KB")
+
+                    # Perform AI analysis on the uploaded photo (using smaller image for speed)
+                    # Use timeout to prevent App Engine 60-second timeout
                     logger.info(f"Starting AI analysis for mobile upload: {filename}")
                     import time
+                    import signal
+
+                    def timeout_handler(signum, frame):
+                        raise TimeoutError("AI analysis took too long")
+
                     start_time = time.time()
-                    ai_analysis = analyze_uploaded_photo_with_ai(photo_data)
-                    analysis_time = time.time() - start_time
+                    ai_analysis = None
+                    try:
+                        # Set 45-second timeout to ensure response before 60s App Engine limit
+                        signal.signal(signal.SIGALRM, timeout_handler)
+                        signal.alarm(45)
 
-                    confidence = ai_analysis.get('confidence', 0)
-                    logger.info(f"AI analysis complete in {analysis_time:.2f}s: {ai_analysis.get('item_name', 'Unknown')} (confidence: {confidence:.2f})")
+                        ai_analysis = analyze_uploaded_photo_with_ai(ai_photo_data)
 
-                    if confidence < 0.5:
-                        logger.warning(f"Low confidence mobile identification ({confidence:.2f}): {ai_analysis.get('item_name', 'Unknown')}")
+                        signal.alarm(0)  # Cancel the alarm
+                        analysis_time = time.time() - start_time
+
+                        confidence = ai_analysis.get('confidence', 0)
+                        logger.info(f"AI analysis complete in {analysis_time:.2f}s: {ai_analysis.get('item_name', 'Unknown')} (confidence: {confidence:.2f})")
+
+                        if confidence < 0.5:
+                            logger.warning(f"Low confidence mobile identification ({confidence:.2f}): {ai_analysis.get('item_name', 'Unknown')}")
+                    except (TimeoutError, Exception) as ai_timeout:
+                        signal.alarm(0)  # Cancel the alarm
+                        analysis_time = time.time() - start_time
+                        logger.warning(f"AI analysis timeout or error after {analysis_time:.2f}s: {ai_timeout}. Using fallback.")
+                        ai_analysis = None
 
                 except Exception as img_error:
                     logger.error(f"Image compression or AI analysis error: {img_error}")
