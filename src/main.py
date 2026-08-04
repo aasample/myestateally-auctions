@@ -2742,60 +2742,42 @@ def generate_photo_session_qr():
 def submit_photo_for_session(session_id):
     """Mobile uploads photo into a photo-only QR session (no item created)."""
     try:
-        import signal
         import time
-
-        # Set 55-second timeout to ensure response before 60s App Engine limit
-        def timeout_handler(signum, frame):
-            raise TimeoutError("Photo submit took too long")
-
-        signal.signal(signal.SIGALRM, timeout_handler)
-        signal.alarm(55)
         start_time = time.time()
 
-        try:
-            qr_session = storage_service.get_document('qr_sessions', session_id)
-            if not qr_session:
-                signal.alarm(0)
-                return jsonify({'success': False, 'error': 'Invalid or expired session'}), 400
-            if qr_session.get('mode') != 'photo_only':
-                signal.alarm(0)
-                return jsonify({'success': False, 'error': 'Invalid session mode'}), 400
-            if 'photo' not in request.files:
-                signal.alarm(0)
-                return jsonify({'success': False, 'error': 'No photo provided'}), 400
-            file = request.files['photo']
-            if not file.filename or not allowed_file(file.filename):
-                signal.alarm(0)
-                return jsonify({'success': False, 'error': 'Invalid file type'}), 400
+        qr_session = storage_service.get_document('qr_sessions', session_id)
+        if not qr_session:
+            return jsonify({'success': False, 'error': 'Invalid or expired session'}), 400
+        if qr_session.get('mode') != 'photo_only':
+            return jsonify({'success': False, 'error': 'Invalid session mode'}), 400
+        if 'photo' not in request.files:
+            return jsonify({'success': False, 'error': 'No photo provided'}), 400
+        file = request.files['photo']
+        if not file.filename or not allowed_file(file.filename):
+            return jsonify({'success': False, 'error': 'Invalid file type'}), 400
 
-            filename = secure_filename(file.filename)
-            upload_dir = '/tmp/uploads' if os.environ.get('GAE_ENV') else os.path.join(tempfile.gettempdir(), 'uploads')
-            os.makedirs(upload_dir, exist_ok=True)
-            file_path = os.path.join(upload_dir, f"qr_{session_id}_{filename}")
-            file.save(file_path)
+        filename = secure_filename(file.filename)
+        upload_dir = '/tmp/uploads' if os.environ.get('GAE_ENV') else os.path.join(tempfile.gettempdir(), 'uploads')
+        os.makedirs(upload_dir, exist_ok=True)
+        file_path = os.path.join(upload_dir, f"qr_{session_id}_{filename}")
+        file.save(file_path)
 
-            # Compress with 100KB max to keep it fast
-            logger.info(f"Compressing photo for session {session_id}: {filename}")
-            photo_base64 = compress_image_to_base64(file_path, max_size_kb=100)
-            compress_time = time.time() - start_time
-            logger.info(f"Compression done in {compress_time:.2f}s")
+        # Compress with 100KB max to keep it fast
+        logger.info(f"Compressing photo for session {session_id}: {filename}")
+        photo_base64 = compress_image_to_base64(file_path, max_size_kb=100)
+        compress_time = time.time() - start_time
+        logger.info(f"Compression done in {compress_time:.2f}s")
 
-            # Update Firestore with timeout protection
-            storage_service.update_document('qr_sessions', session_id, {'photo': f"data:image/jpeg;base64,{photo_base64}"})
-            signal.alarm(0)  # Cancel alarm
+        # Update Firestore
+        storage_service.update_document('qr_sessions', session_id, {'photo': f"data:image/jpeg;base64,{photo_base64}"})
 
-            total_time = time.time() - start_time
-            logger.info(f"Photo stored for photo-only session {session_id} in {total_time:.2f}s")
-            return jsonify({'success': True})
-        except (TimeoutError, Exception) as e:
-            signal.alarm(0)  # Cancel alarm
-            elapsed = time.time() - start_time
-            logger.error(f"Error in photo-submit for session {session_id} after {elapsed:.2f}s: {e}")
-            # Still return success if we got far enough (photo may still be stored)
-            return jsonify({'success': False, 'error': 'Upload timed out - please try again'}), 503
+        total_time = time.time() - start_time
+        logger.info(f"Photo stored for photo-only session {session_id} in {total_time:.2f}s")
+        return jsonify({'success': True})
     except Exception as e:
-        logger.error(f"Unexpected error in photo-submit for session {session_id}: {e}")
+        logger.error(f"Error in photo-submit for session {session_id}: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({'success': False, 'error': 'Upload failed'}), 500
 
 
@@ -2909,24 +2891,15 @@ def mobile_upload_api():
                     logger.info(f"AI image size: {ai_size_kb:.2f}KB")
 
                     # Perform AI analysis on the uploaded photo (using smaller image for speed)
-                    # Use timeout to prevent App Engine 60-second timeout
                     logger.info(f"Starting AI analysis for mobile upload: {filename}")
                     import time
-                    import signal
-
-                    def timeout_handler(signum, frame):
-                        raise TimeoutError("AI analysis took too long")
-
                     start_time = time.time()
                     ai_analysis = None
+
                     try:
-                        # Set 45-second timeout to ensure response before 60s App Engine limit
-                        signal.signal(signal.SIGALRM, timeout_handler)
-                        signal.alarm(45)
-
+                        # Call AI with its own 30-second timeout (set in analyze_uploaded_photo_with_ai)
+                        # The smaller 200KB image keeps the request fast
                         ai_analysis = analyze_uploaded_photo_with_ai(ai_photo_data)
-
-                        signal.alarm(0)  # Cancel the alarm
                         analysis_time = time.time() - start_time
 
                         confidence = ai_analysis.get('confidence', 0)
@@ -2934,10 +2907,9 @@ def mobile_upload_api():
 
                         if confidence < 0.5:
                             logger.warning(f"Low confidence mobile identification ({confidence:.2f}): {ai_analysis.get('item_name', 'Unknown')}")
-                    except (TimeoutError, Exception) as ai_timeout:
-                        signal.alarm(0)  # Cancel the alarm
+                    except Exception as ai_error:
                         analysis_time = time.time() - start_time
-                        logger.warning(f"AI analysis timeout or error after {analysis_time:.2f}s: {ai_timeout}. Using fallback.")
+                        logger.warning(f"AI analysis error after {analysis_time:.2f}s: {ai_error}. Using fallback.")
                         ai_analysis = None
 
                 except Exception as img_error:
