@@ -4405,7 +4405,6 @@ async function handleSignup(event) {
     const name = document.getElementById('signup-name').value;
     const password = document.getElementById('signup-password').value;
     const confirmPassword = document.getElementById('signup-password-confirm').value;
-    const enableMfa = document.getElementById('enable-mfa').checked;
     const betaCode = document.getElementById('signup-beta-code')?.value?.trim().toUpperCase() || '';
 
     if (!authState.email || !name || !password) return;
@@ -4415,8 +4414,8 @@ async function handleSignup(event) {
         return;
     }
 
-    if (password.length < 8) {
-        app.showMessage('Password must be at least 8 characters', 'error');
+    if (password.length < 12) {
+        app.showMessage('Password must be at least 12 characters', 'error');
         return;
     }
 
@@ -4428,27 +4427,17 @@ async function handleSignup(event) {
                 name,
                 email: authState.email,
                 password,
-                enable_mfa: enableMfa,
                 beta_code: betaCode
             })
         });
-        
+
         const data = await response.json();
-        
+
         if (data.success) {
-            if (enableMfa && data.mfa_secret) {
-                // Show MFA setup
-                authState.mfaSecret = data.mfa_secret;
-                authState.sessionId = data.session_id;
-                setupMfaDisplay(data.mfa_secret, authState.email);
-                showAuthStep('mfa-setup');
-            } else {
-                // Signup complete without MFA
-                app.currentUser = data.user;
-                app.updateAuthUI(true);
-                closeModal('auth-modal');
-                app.showMessage('Account created successfully!', 'success');
-            }
+            app.currentUser = data.user;
+            app.updateAuthUI(true);
+            closeModal('auth-modal');
+            app.showMessage('Account created successfully!', 'success');
         } else {
             app.showMessage(data.error || 'Signup failed', 'error');
         }
