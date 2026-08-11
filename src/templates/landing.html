@@ -1168,10 +1168,6 @@
                                 <input type="text" id="signup-beta-code" placeholder="Enter beta code for free access" style="text-transform: uppercase;">
                                 <small class="password-hint">Enter ESTATEALLY2026 for free beta access</small>
                             </div>
-                            <div class="form-group checkbox-group">
-                                <input type="checkbox" id="enable-mfa" checked>
-                                <label for="enable-mfa">Enable two-factor authentication (recommended)</label>
-                            </div>
                             <button type="submit" class="btn primary full-width">
                                 <i class="fas fa-user-plus"></i> Create Account
                             </button>
@@ -1179,105 +1175,6 @@
                     </div>
                 </div>
 
-                <!-- Step 3: MFA Verification -->
-                <div id="auth-step-mfa" class="auth-step">
-                    <div class="auth-step-content">
-                        <div class="auth-icon">
-                            <i class="fas fa-mobile-alt fa-3x"></i>
-                        </div>
-                        <h4>Two-Factor Authentication</h4>
-                        <p class="auth-subtitle">Enter the 6-digit code from your authenticator app</p>
-
-                        <form id="mfa-form">
-                            <div class="form-group">
-                                <div class="mfa-code-input">
-                                    <input type="text" maxlength="1" class="mfa-digit" data-index="0">
-                                    <input type="text" maxlength="1" class="mfa-digit" data-index="1">
-                                    <input type="text" maxlength="1" class="mfa-digit" data-index="2">
-                                    <input type="text" maxlength="1" class="mfa-digit" data-index="3">
-                                    <input type="text" maxlength="1" class="mfa-digit" data-index="4">
-                                    <input type="text" maxlength="1" class="mfa-digit" data-index="5">
-                                </div>
-                            </div>
-                            <div class="form-group checkbox-group">
-                                <input type="checkbox" id="trust-device">
-                                <label for="trust-device">Trust this device for 30 days</label>
-                            </div>
-                            <button type="submit" class="btn primary full-width">
-                                <i class="fas fa-check"></i> Verify Code
-                            </button>
-                        </form>
-
-                        <div class="auth-footer">
-                            <button class="btn-link" onclick="app.resendMfaCode()">
-                                Didn't receive a code? Resend
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Step 4: MFA Setup (For New Users) -->
-                <div id="auth-step-mfa-setup" class="auth-step">
-                    <div class="auth-step-content">
-                        <div class="auth-icon">
-                            <i class="fas fa-qrcode fa-3x"></i>
-                        </div>
-                        <h4>Set Up Two-Factor Authentication</h4>
-                        <p class="auth-subtitle">Secure your account with an authenticator app</p>
-
-                        <!-- Instructions Box -->
-                        <div class="mfa-instructions">
-                            <p><strong>What is an authenticator app?</strong></p>
-                            <p>An authenticator app generates time-based 6-digit security codes every 30 seconds. Popular free options include:</p>
-                            <ul style="font-size: 14px; margin: 12px 0 20px 20px;">
-                                <li><strong>Google Authenticator</strong> (iOS, Android)</li>
-                                <li><strong>Microsoft Authenticator</strong> (iOS, Android)</li>
-                                <li><strong>Authy</strong> (iOS, Android, Desktop)</li>
-                                <li><strong>Apple Passkeys</strong> (iOS 15+)</li>
-                            </ul>
-                            <p><strong>Setup steps:</strong></p>
-                            <ol style="font-size: 14px; margin: 0;">
-                                <li>Install one of the apps above on your phone or computer</li>
-                                <li>Open the app and select "Scan QR Code" or "Add Account"</li>
-                                <li>Scan the QR code below with your app</li>
-                                <li>Your app will show a 6-digit code — enter it below to verify</li>
-                            </ol>
-                        </div>
-
-                        <div class="mfa-setup-container">
-                            <div id="mfa-qr-code" class="mfa-qr-code">
-                                <!-- QR code will be inserted here -->
-                            </div>
-                            <div class="mfa-manual-code">
-                                <p><strong>Can't scan?</strong> Enter this code manually:</p>
-                                <code id="mfa-secret-code">XXXX XXXX XXXX XXXX</code>
-                            </div>
-                        </div>
-
-                        <form id="mfa-setup-verify-form">
-                            <div class="form-group">
-                                <label>Enter the 6-digit code from your app to verify</label>
-                                <div class="mfa-code-input">
-                                    <input type="text" maxlength="1" class="mfa-digit" data-index="0">
-                                    <input type="text" maxlength="1" class="mfa-digit" data-index="1">
-                                    <input type="text" maxlength="1" class="mfa-digit" data-index="2">
-                                    <input type="text" maxlength="1" class="mfa-digit" data-index="3">
-                                    <input type="text" maxlength="1" class="mfa-digit" data-index="4">
-                                    <input type="text" maxlength="1" class="mfa-digit" data-index="5">
-                                </div>
-                            </div>
-                            <button type="submit" class="btn primary full-width">
-                                <i class="fas fa-check"></i> Complete Setup
-                            </button>
-                        </form>
-
-                        <div class="auth-footer">
-                            <button class="btn-link" onclick="app.skipMfaSetup()">
-                                Skip for now (not recommended)
-                            </button>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
     </div>

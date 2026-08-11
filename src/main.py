@@ -3762,27 +3762,7 @@ def login():
                 'success': False,
                 'error': 'Invalid email or password'
             }), 401
-        
-        # Check if MFA is enabled and device is not trusted
-        if user.get('mfa_enabled') and not session.get('mfa_trusted'):
-            # Create temporary MFA session
-            if 'mfa_sessions' not in auth_storage:
-                auth_storage['mfa_sessions'] = {}
-            
-            mfa_session_id = secrets.token_urlsafe(32)
-            auth_storage['mfa_sessions'][mfa_session_id] = {
-                'user_id': user['id'],
-                'created_at': datetime.now().isoformat(),
-                'expires_at': (datetime.now() + timedelta(minutes=5)).isoformat()
-            }
-            
-            return jsonify({
-                'success': True,
-                'mfa_required': True,
-                'session_id': mfa_session_id,
-                'message': 'MFA verification required'
-            })
-        
+
         # Update last login
         user['last_login'] = datetime.now().isoformat()
         if USE_FIRESTORE:
@@ -3868,9 +3848,6 @@ def signup():
         account_type = 'beta' if beta_code == BETA_CODE else 'free'
         grandfathered = (account_type == 'beta')
 
-        # Check if MFA should be enabled
-        enable_mfa = data.get('enable_mfa', False)
-
         # Create new user with account_type field
         user_id = generate_user_id()
         user_data = {
@@ -3893,32 +3870,8 @@ def signup():
         else:
             auth_storage['users'][user_id] = user_data
             save_auth_storage()
-        
-        # If MFA requested, generate secret and return it
-        if enable_mfa:
-            import pyotp
-            mfa_secret = pyotp.random_base32()
-            
-            # Create temporary MFA session
-            if 'mfa_sessions' not in auth_storage:
-                auth_storage['mfa_sessions'] = {}
-            
-            mfa_session_id = secrets.token_urlsafe(32)
-            auth_storage['mfa_sessions'][mfa_session_id] = {
-                'user_id': user_id,
-                'created_at': datetime.now().isoformat(),
-                'expires_at': (datetime.now() + timedelta(minutes=10)).isoformat()
-            }
-            
-            return jsonify({
-                'success': True,
-                'mfa_required': True,
-                'mfa_secret': mfa_secret,
-                'session_id': mfa_session_id,
-                'message': 'Please set up two-factor authentication'
-            })
-        
-        # Create session (if no MFA)
+
+        # Create session immediately
         session['user_id'] = user_id
         session['user_email'] = email
         
