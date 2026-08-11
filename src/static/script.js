@@ -294,14 +294,6 @@ class MyEstateAllyApp {
             this.login(email, password);
         });
 
-        document.getElementById('signup-form-content')?.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const name = document.getElementById('signup-name').value.trim();
-            const email = document.getElementById('signup-email').value.trim();
-            const password = document.getElementById('signup-password').value.trim();
-            this.signup(name, email, password);
-        });
-
         // Modal close handlers
         document.querySelectorAll('.modal-close').forEach(btn => {
             btn.addEventListener('click', (e) => {
