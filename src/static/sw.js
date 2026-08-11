@@ -3,9 +3,9 @@
  * Provides offline functionality and background sync
  */
 
-const CACHE_NAME = 'myestateally-v1.2.0';
-const STATIC_CACHE = 'myestateally-static-v1.2.0';
-const DYNAMIC_CACHE = 'myestateally-dynamic-v1.2.0';
+const CACHE_NAME = 'myestateally-v1.2.1';
+const STATIC_CACHE = 'myestateally-static-v1.2.1';
+const DYNAMIC_CACHE = 'myestateally-dynamic-v1.2.1';
 
 // Files to cache for offline functionality
 const STATIC_FILES = [

@@ -7790,3 +7790,158 @@ body:not(.landing-page) .inventory-filters input::placeholder {
 /* ================================================================
    END GLAMOUR THEME
    ================================================================ */
+
+/* ================================================================
+   PHASE 14 — DASHBOARD CLEAN-UP (sage/cream unification)
+   Overrides leftover navy/purple/gold glamour rules that clashed
+   with the warm sage/cream palette. Appended last so these win.
+   Palette: bark #2c2420 | linen #f0ece2 | stone #d4cfc4
+            sage #4a6741 | sage-light #dce8d8 | forest #3b5a33
+   ================================================================ */
+
+/* --- Header: solid dark bark, no light-end gradient ------------- */
+.header {
+    background: linear-gradient(135deg, var(--navy, #2c2420) 0%, var(--navy-mid, #3a3530) 100%);
+    border-bottom: none;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.15);
+}
+.logo i {
+    color: var(--gold-light, #dce8d8);
+    filter: none;
+}
+.estate-managing-label {
+    color: var(--gold-light, #dce8d8);
+}
+.estate-select {
+    border-color: rgba(220, 232, 216, 0.45);
+}
+.user-initials-avatar {
+    box-shadow: 0 0 0 2px rgba(220, 232, 216, 0.35), 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* --- Nav: light linen bar, dark text, sage active state --------- */
+.nav {
+    background: var(--navy-light, #f0ece2);
+    border-bottom: 1px solid #d4cfc4;
+    box-shadow: 0 2px 6px rgba(44, 36, 32, 0.06);
+}
+.nav-btn {
+    color: #5a5248;
+}
+.nav-btn:hover {
+    background: rgba(74, 103, 65, 0.08);
+    color: var(--navy, #2c2420);
+}
+.nav-btn.active {
+    background: rgba(74, 103, 65, 0.12);
+    color: var(--gold-dark, #3b5a33);
+}
+.nav-btn.active i {
+    filter: none;
+}
+
+/* --- Primary buttons: solid sage, no blue/purple gradient ------- */
+.btn.primary {
+    background: var(--gold, #4a6741);
+    box-shadow: 0 2px 8px rgba(74, 103, 65, 0.25);
+}
+.btn.primary:hover {
+    background: var(--gold-dark, #3b5a33);
+    box-shadow: 0 4px 14px rgba(74, 103, 65, 0.35);
+    transform: translateY(-1px);
+}
+.btn.ai-lookup-btn {
+    background: var(--gold, #4a6741);
+}
+.btn.ai-lookup-btn:hover {
+    background: var(--gold-dark, #3b5a33);
+}
+
+/* --- Welcome card: warm linen, dark text, no dark gradient ------ */
+.welcome-card {
+    background: var(--navy-light, #f0ece2);
+    border: 1px solid #d4cfc4;
+    box-shadow: 0 2px 10px rgba(44, 36, 32, 0.06);
+}
+.welcome-card::before {
+    display: none;
+}
+.welcome-card h1 {
+    text-shadow: none;
+}
+.welcome-card--dynamic h1 {
+    color: var(--navy, #2c2420);
+}
+.welcome-card--dynamic #dashboard-subtitle {
+    color: #5a5248;
+}
+
+/* --- Stat cards: one accent color, matching icon circles -------- */
+.stat-card {
+    background: #ffffff;
+    border: 1px solid #d4cfc4;
+    box-shadow: 0 1px 4px rgba(44, 36, 32, 0.05);
+}
+.stat-card:hover {
+    border-color: var(--gold, #4a6741);
+    box-shadow: 0 4px 14px rgba(44, 36, 32, 0.10);
+}
+.stat-card:nth-child(1) .stat-icon,
+.stat-card:nth-child(2) .stat-icon,
+.stat-card:nth-child(3) .stat-icon,
+.stat-card:nth-child(4) .stat-icon {
+    background: var(--gold-light, #dce8d8);
+    color: var(--gold-dark, #3b5a33);
+    box-shadow: none;
+}
+.stat-card--link:hover,
+.stat-card--link:focus-visible {
+    box-shadow: 0 6px 18px rgba(44, 36, 32, 0.10), 0 0 0 1px rgba(74, 103, 65, 0.40);
+}
+
+/* --- Getting Started card: light with sage accents -------------- */
+.next-step-card {
+    background: #ffffff;
+    border: 1px solid #d4cfc4;
+}
+.next-step-card h3 {
+    color: var(--gold-dark, #3b5a33);
+}
+.onboarding-item {
+    background: var(--bg-primary, #f8f5ee);
+    border: 1px solid #e2ddd2;
+}
+.onboarding-item:hover {
+    background: #f3efe6;
+}
+.onboarding-item .step-icon {
+    color: var(--gold, #4a6741);
+}
+.onboarding-item__text strong {
+    color: var(--navy, #2c2420);
+}
+.onboarding-item__text span {
+    color: #5a5248;
+}
+.onboarding-item.completed {
+    background: rgba(74, 103, 65, 0.08);
+    border-color: rgba(74, 103, 65, 0.35);
+}
+.onboarding-item.completed .step-icon {
+    color: #16a34a;
+}
+.onboarding-item.completed .onboarding-item__text strong {
+    color: var(--navy, #2c2420);
+}
+.onboarding-item.completed .onboarding-item__text span {
+    color: #5a5248;
+}
+
+/* --- Go To shortcuts: sage-light icon circles ------------------- */
+.shortcut-icon {
+    background: var(--gold-light, #dce8d8);
+    color: var(--gold-dark, #3b5a33);
+}
+.shortcut-item {
+    border-color: #d4cfc4;
+}

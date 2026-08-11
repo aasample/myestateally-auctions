@@ -109,7 +109,7 @@ const CACHE_NAME = 'myestateally-v1.0.8';        // ← increment
 const STATIC_CACHE = 'myestateally-static-v1.0.8';
 const DYNAMIC_CACHE = 'myestateally-dynamic-v1.0.8';
 ```
-Current version: **v1.1.9**
+Current version: **v1.2.1**
 The SW calls `skipWaiting()` on install so the new version activates immediately.
 
 ---
@@ -326,6 +326,12 @@ Replaces navy (#0a1628) + gold (#c9a84c). Updated CSS variables in both `src/tem
 - How It Works cards: 3-col on desktop → 1-col on mobile
 - Quote block: max-width 520px scales to container ≤768px
 - All font sizes, spacing, and padding adjust appropriately
+
+### Phase 14 — Dashboard Clean-Up (Aug 2026)
+- **Problem**: Phase 13 recolored the CSS variables but many glamour rules had HARDCODED navy/purple/gold hexes, so the logged-in dashboard was a clash of old and new themes (navy/purple welcome card, violet primary buttons, purple/antique-gold stat icons, dark near-black Getting Started card, muddy dark-to-light header/nav gradients).
+- **Fix**: appended a "PHASE 14 — DASHBOARD CLEAN-UP" section at the very bottom of `styles.css` (after END GLAMOUR THEME) overriding: header (solid bark, no light-end gradient), nav (light linen bar, dark text, sage active), `.btn.primary` + `.btn.ai-lookup-btn` (solid sage, was blue→purple gradient), welcome card (linen bg, bark text, pattern overlay removed), all four stat icons (uniform sage-light circle + forest icon, was 4 different colors), next-step-card (white bg, cream rows, dark text — was near-black), shortcut icons (sage-light circles)
+- **Key insight**: overrides go at the FILE BOTTOM — equal-specificity rules are resolved by source order, so appending wins without `!important`
+- SW bumped to **v1.2.1**
 
 ---
 
