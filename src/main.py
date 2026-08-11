@@ -820,30 +820,15 @@ def get_user_estates(user_id):
         return user_estates
     except Exception as e:
         logger.error(f"Error getting user estates from Firestore: {e}")
-        # Fallback to in-memory storage
-        if user_id not in estate_storage['user_estates']:
-            return []
-        estate_ids = estate_storage['user_estates'][user_id]
-        estates = []
-        for estate_id in estate_ids:
-            if estate_id in estate_storage['estates']:
-                estate = estate_storage['estates'][estate_id].copy()
-                estate['id'] = estate_id
-                # Add user's role in this estate
-                if estate_id in estate_storage['estates']:
-                    members = estate_storage['estates'][estate_id].get('members', {})
-                    if user_id in members:
-                        estate['user_role'] = members[user_id].get('role', 'member')
-                    elif estate_storage['estates'][estate_id].get('owner_id') == user_id:
-                        estate['user_role'] = 'owner'
-                estates.append(estate)
-        return estates
+        # The legacy in-memory estate_storage was removed in the Firestore
+        # migration; there is no fallback store to read from.
+        return []
 
 def user_has_estate_access(user_id, estate_id):
     """Check if user has access to an estate"""
-    if estate_id not in estate_storage['estates']:
+    estate = firestore_get_estate(estate_id)
+    if not estate:
         return False
-    estate = estate_storage['estates'][estate_id]
     # Owner always has access
     if estate.get('owner_id') == user_id:
         return True
@@ -4998,11 +4983,18 @@ def switch_estate():
         session['current_estate_id'] = estate_id
 
         # Save as user's last used estate
-        if user_id in auth_storage['users']:
+        if USE_FIRESTORE:
+            firestore_update_user(user_id, {'last_used_estate': estate_id})
+        elif user_id in auth_storage['users']:
             auth_storage['users'][user_id]['last_used_estate'] = estate_id
             save_auth_storage()
 
-        estate = estate_storage['estates'][estate_id].copy()
+        estate = firestore_get_estate(estate_id)
+        if not estate:
+            return jsonify({
+                'success': False,
+                'error': 'Estate not found'
+            }), 404
         estate['id'] = estate_id
 
         return jsonify({
@@ -5027,15 +5019,15 @@ def invite_to_estate(estate_id):
         if not user:
             return jsonify({'success': False, 'error': 'User not found'}), 404
         
-        if estate_id not in estate_storage['estates']:
+        estate = firestore_get_estate(estate_id)
+        if not estate:
             return jsonify({
                 'success': False,
                 'error': 'Estate not found'
             }), 404
-        
+
         user_id = user.get('id') or session.get('user_id')
-        estate = estate_storage['estates'][estate_id]
-        
+
         # Only owner can invite
         if estate.get('owner_id') != user_id:
             return jsonify({
@@ -5054,34 +5046,29 @@ def invite_to_estate(estate_id):
             }), 400
         
         # Find user by email
-        invitee_user_id = None
-        for uid, u in auth_storage['users'].items():
-            if u.get('email', '').lower() == invitee_email:
-                invitee_user_id = uid
-                break
-        
-        if not invitee_user_id:
+        invitee = firestore_get_user_by_email(invitee_email)
+        if not invitee:
             return jsonify({
                 'success': False,
                 'error': 'User not found. They must sign up first.'
             }), 404
-        
+
+        invitee_user_id = invitee['id']
+
         # Add to estate members
-        if 'members' not in estate:
-            estate['members'] = {}
-        estate['members'][invitee_user_id] = {
+        members = estate.get('members') or {}
+        members[invitee_user_id] = {
             'role': role,
             'joined_at': datetime.now().isoformat()
         }
-        
-        # Add to user's estate list
-        if invitee_user_id not in estate_storage['user_estates']:
-            estate_storage['user_estates'][invitee_user_id] = []
-        if estate_id not in estate_storage['user_estates'][invitee_user_id]:
-            estate_storage['user_estates'][invitee_user_id].append(estate_id)
-        
-        save_estate_storage()
-        
+        firestore_update_estate(estate_id, {'members': members})
+
+        # Add to the invitee's estate list
+        invitee_estates = invitee.get('estates') or []
+        if estate_id not in invitee_estates:
+            invitee_estates.append(estate_id)
+            firestore_update_user(invitee_user_id, {'estates': invitee_estates})
+
         return jsonify({
             'success': True,
             'message': 'User invited to estate successfully'
