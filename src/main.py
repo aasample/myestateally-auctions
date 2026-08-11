@@ -20,7 +20,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
-from flask import Flask, request, jsonify, render_template, send_from_directory, redirect, make_response, url_for, session
+from flask import Flask, request, jsonify, render_template, send_from_directory, redirect, make_response, url_for, session, abort
 from flask_mail import Mail, Message
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -962,7 +962,6 @@ def debug_version():
         return jsonify({'error': 'Debug endpoints are disabled in production'}), 403
     return jsonify({
         'version': '2025-10-03-v3',
-        'setupPWA_exists': hasattr(MyEstateAllyApp if 'MyEstateAllyApp' in globals() else type('Dummy', (), {}), 'setupPWA'),
         'timestamp': datetime.now().isoformat()
     })
 
@@ -3916,8 +3915,8 @@ def forgot_password():
             expires_at = (datetime.now() + timedelta(hours=1)).isoformat()
 
             # Store token in Firestore
-            if USE_FIRESTORE and db:
-                db.collection('password_resets').document(token).set({
+            if USE_FIRESTORE:
+                storage_service.add_document('password_resets', token, {
                     'user_id': user_id,
                     'email': email,
                     'expires_at': expires_at,
@@ -3990,10 +3989,8 @@ def reset_password_submit():
 
         # Look up token
         token_data = None
-        if USE_FIRESTORE and db:
-            doc = db.collection('password_resets').document(token).get()
-            if doc.exists:
-                token_data = doc.to_dict()
+        if USE_FIRESTORE:
+            token_data = storage_service.get_document('password_resets', token)
         else:
             token_data = auth_storage['password_resets'].get(token)
 
@@ -4004,8 +4001,8 @@ def reset_password_submit():
         expires_at = datetime.fromisoformat(token_data['expires_at'])
         if datetime.now() > expires_at:
             # Clean up expired token
-            if USE_FIRESTORE and db:
-                db.collection('password_resets').document(token).delete()
+            if USE_FIRESTORE:
+                storage_service.delete_document('password_resets', token)
             else:
                 auth_storage['password_resets'].pop(token, None)
             return jsonify({'success': False, 'error': 'This reset link has expired. Please request a new one.'}), 400
@@ -4022,8 +4019,8 @@ def reset_password_submit():
         firestore_update_user(user_id, {'password_hash': new_hash})
 
         # Delete used token (single-use)
-        if USE_FIRESTORE and db:
-            db.collection('password_resets').document(token).delete()
+        if USE_FIRESTORE:
+            storage_service.delete_document('password_resets', token)
         else:
             auth_storage['password_resets'].pop(token, None)
 
