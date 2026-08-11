@@ -3472,8 +3472,10 @@ class MyEstateAllyApp {
                 this.updateAuthUI(true);
                 this.closeModal('auth-modal');
                 this.showMessage('Welcome back!', 'success');
-                // Load app state (estates, etc.)
-                await this.checkAuthStatus();
+                // Reload to ensure server serves index.html (app) not landing.html
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
                 return true;
             } else {
                 throw new Error(data.error || 'Login failed');
@@ -4385,8 +4387,10 @@ async function handlePasswordLogin(event) {
                 app.updateAuthUI(true);
                 closeModal('auth-modal');
                 app.showMessage('Welcome back!', 'success');
-                // Load app state (estates, etc.)
-                app.checkAuthStatus();
+                // Reload to ensure server serves index.html (app) not landing.html
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
             }
         } else {
             app.showMessage(data.error || 'Invalid password', 'error');
@@ -4541,6 +4545,10 @@ async function handleMfaVerification(event) {
             app.updateAuthUI(true);
             closeModal('auth-modal');
             app.showMessage('Successfully authenticated!', 'success');
+            // Reload to ensure server serves index.html (app) not landing.html
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
         } else {
             app.showMessage(data.error || 'Invalid code', 'error');
             // Clear digits

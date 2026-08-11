@@ -3,9 +3,9 @@
  * Provides offline functionality and background sync
  */
 
-const CACHE_NAME = 'myestateally-v1.2.2';
-const STATIC_CACHE = 'myestateally-static-v1.2.2';
-const DYNAMIC_CACHE = 'myestateally-dynamic-v1.2.2';
+const CACHE_NAME = 'myestateally-v1.2.3';
+const STATIC_CACHE = 'myestateally-static-v1.2.3';
+const DYNAMIC_CACHE = 'myestateally-dynamic-v1.2.3';
 
 // Files to cache for offline functionality.
 // Same-origin only: an external CDN entry that fails to fetch makes
