@@ -742,7 +742,7 @@ def generate_share_link(estate_id: str) -> str:
 
 def get_shared_inventory(share_id):
     """Get inventory items for family sharing"""
-    share_info = family_storage.get('share_links', {}).get(share_id)
+    share_info = firestore_get_share_link(share_id)
     if not share_info:
         return None
 
@@ -767,10 +767,11 @@ def get_shared_inventory(share_id):
 
     # Filter inventory based on sharing settings
     items = []
-    for item_id, item in inventory_storage.items():
-        if item.get('estate_id') != estate_id:
-            continue
-
+    estate_items = storage_service.query_documents(
+        'inventory',
+        filters=[('estate_id', '==', estate_id)]
+    ) or []
+    for item in estate_items:
         if estate_data['sharing_settings']['show_for_sale_only']:
             if item.get('forSale', False):
                 items.append(item)
@@ -781,7 +782,7 @@ def get_shared_inventory(share_id):
 
 def get_share_link_context(share_id: str):
     """Get estate_id, estate_data, and share link metadata for a share ID"""
-    share_info = family_storage.get('share_links', {}).get(share_id)
+    share_info = firestore_get_share_link(share_id)
     if not share_info:
         return None, None, None
 
@@ -1000,23 +1001,21 @@ def debug_inventory():
         except Exception as json_error:
             logger.warning(f"JSON storage error in debug: {json_error}")
         
-        # Fallback to in-memory
-        items = list(inventory_storage.values())
+        # Fallback to Firestore
+        items = firestore_list_inventory_items() or []
         return jsonify({
             'success': True,
-            'source': 'in_memory',
+            'source': 'firestore',
             'item_count': len(items),
             'items': items,
             'sample_item_structure': items[0] if items else None,
             'json_file_exists': False
         })
-        
+
     except Exception as e:
         return jsonify({
             'success': False,
-            'error': str(e),
-            'inventory_storage_count': len(inventory_storage),
-            'inventory_storage_sample': list(inventory_storage.values())[0] if inventory_storage else None
+            'error': str(e)
         })
 
 @app.route('/api/debug/test-upload')
@@ -1043,13 +1042,12 @@ def debug_test_upload():
         }
         
         # Save to storage
-        inventory_storage[item_id] = test_item
-        save_storage('inventory.json', inventory_storage)
-        
+        firestore_add_inventory_item(test_item)
+
         return jsonify({
             'success': True,
             'message': f'Created test item {item_id}',
-            'item_count': len(inventory_storage),
+            'item_count': len(firestore_list_inventory_items() or []),
             'item': test_item
         })
         
@@ -1084,12 +1082,14 @@ def debug_fix_images():
         except Exception as e:
             logger.error(f"Could not update JSON storage: {e}")
         
-        # Update in-memory storage to match
-        for item_id, item in inventory_storage.items():
+        # Update Firestore items to match
+        for item in (firestore_list_inventory_items() or []):
             if item.get('photo', '').startswith('/uploads/'):
                 item['photo'] = '/static/placeholder-image.png'
                 item['lastModified'] = datetime.now().isoformat()
-        
+                firestore_update_inventory_item(item)
+                updated_count += 1
+
         return jsonify({
             'success': True,
             'updated_count': updated_count,
@@ -2519,8 +2519,8 @@ def debug_email_status():
             },
             'sent_emails': notification_storage['sent'][-10:],  # Last 10 emails
             'family_estates': {
-                estate_id: list(estate_data.get('members', {}).keys())
-                for estate_id, estate_data in family_storage.get('estates', {}).items()
+                (family.get('estate_id') or family.get('id')): list(family.get('members', {}).keys())
+                for family in (storage_service.list_documents('family_data') or [])
             }
         })
     except Exception as e:
@@ -3329,7 +3329,7 @@ def want_item(share_id):
             }), 400
 
         # Verify item exists and belongs to estate
-        item = inventory_storage.get(item_id)
+        item = firestore_get_inventory_item(item_id)
         if not item or item.get('estate_id') != estate_id:
             return jsonify({
                 'success': False,
@@ -3497,7 +3497,14 @@ def manage_share_link():
             for share_id, link in estate_data['share_links'].items():
                 expires_at = datetime.fromisoformat(link['expires_at'])
                 if link.get('active', True) and datetime.now() < expires_at:
-                    family_storage['share_links'][share_id] = link
+                    # Links created before share_links moved to its own
+                    # collection only live on the family_data doc; backfill
+                    # them so the family-view lookup can resolve the share id.
+                    if not firestore_get_share_link(share_id):
+                        firestore_add_share_link(share_id, dict(link))
+                        firestore_update_share_link(
+                            share_id, {'created_at': link['created_at']}
+                        )
                     return jsonify({
                         'success': True,
                         'share_link': f"{request.host_url}family-view?share={share_id}",
@@ -4532,11 +4539,12 @@ def export_user_data():
                 export_data['inventory'].extend(inventory)
                 export_data['documents'].extend(documents)
         else:
-            # Fallback to JSON storage
-            export_data['inventory'] = [
-                item for item in inventory_storage.values()
-                if item.get('user_id') == user_id
-            ]
+            # The legacy in-memory/JSON inventory store was removed in the
+            # Firestore migration; read whatever Firestore holds for this user.
+            export_data['inventory'] = storage_service.query_documents(
+                'inventory',
+                filters=[('user_id', '==', user_id)]
+            ) or []
 
         # Create JSON file
         json_data = json.dumps(export_data, indent=2)
@@ -4633,14 +4641,13 @@ def delete_account():
                 del auth_storage['users'][user_id]
                 save_auth_storage()
 
-            # Delete inventory items
-            inventory_to_delete = [
-                item_id for item_id, item in inventory_storage.items()
-                if item.get('user_id') == user_id
-            ]
-            for item_id in inventory_to_delete:
-                del inventory_storage[item_id]
-            save_storage('inventory.json', inventory_storage)
+            # Delete inventory items (the legacy JSON store was removed in the
+            # Firestore migration)
+            for item in (storage_service.query_documents(
+                'inventory',
+                filters=[('user_id', '==', user_id)]
+            ) or []):
+                firestore_delete_inventory_item(item['id'])
 
         # Clear session
         session.clear()
@@ -5135,7 +5142,10 @@ def generate_estate_valuation_report(user_id, report_type='full'):
     """Generate professional estate valuation PDF report"""
     try:
         # Get user inventory
-        user_items = [item for item in inventory_storage.values() if item.get('user_id') == user_id]
+        user_items = storage_service.query_documents(
+            'inventory',
+            filters=[('user_id', '==', user_id)]
+        ) or []
         
         if not user_items:
             return None
@@ -5325,7 +5335,7 @@ def generate_family_interest_report(estate_id: str):
         sorted_items = sorted(item_interest.items(), key=lambda x: len(x[1]), reverse=True)
         
         for item_id, interested_members in sorted_items:
-            item = inventory_storage.get(item_id, {})
+            item = firestore_get_inventory_item(item_id) or {}
             if item.get('estate_id') != estate_id:
                 continue
             item_name = item.get('name', 'Unknown Item')
@@ -5373,8 +5383,11 @@ def generate_assignment_report(estate_id: str):
     try:
         # Get all assigned items for the estate
         assigned_items = [
-            item for item in inventory_storage.values()
-            if item.get('assignedTo') and item.get('estate_id') == estate_id
+            item for item in (storage_service.query_documents(
+                'inventory',
+                filters=[('estate_id', '==', estate_id)]
+            ) or [])
+            if item.get('assignedTo')
         ]
 
         if not assigned_items:
@@ -6092,31 +6105,31 @@ def dispose_item(item_id):
                 'error': 'Disposal type required'
             }), 400
         
-        if item_id not in inventory_storage or inventory_storage[item_id].get('estate_id') != estate_id:
+        item = firestore_get_inventory_item(item_id)
+        if not item or item.get('estate_id') != estate_id:
             return jsonify({
                 'success': False,
                 'error': 'Item not found'
             }), 404
-        
+
         # Update item with disposal information
-        inventory_storage[item_id]['status'] = 'disposed'
-        inventory_storage[item_id]['disposal_type'] = disposal_type
-        inventory_storage[item_id]['disposal_value'] = float(disposal_value)
-        inventory_storage[item_id]['disposal_notes'] = disposal_notes
-        inventory_storage[item_id]['disposal_date'] = disposal_date
-        inventory_storage[item_id]['lastModified'] = datetime.now().isoformat()
-        
-        # Try to save to Firestore
-        try:
-            firestore_update_inventory_item(inventory_storage[item_id])
-        except:
-            # Fall back to JSON storage
-            save_storage('inventory.json', inventory_storage)
-        
+        item['status'] = 'disposed'
+        item['disposal_type'] = disposal_type
+        item['disposal_value'] = float(disposal_value)
+        item['disposal_notes'] = disposal_notes
+        item['disposal_date'] = disposal_date
+        item['lastModified'] = datetime.now().isoformat()
+
+        if not firestore_update_inventory_item(item):
+            return jsonify({
+                'success': False,
+                'error': 'Failed to dispose item'
+            }), 500
+
         return jsonify({
             'success': True,
             'message': f'Item marked as {disposal_type}',
-            'item': inventory_storage[item_id]
+            'item': item
         })
         
     except Exception as e:
@@ -6170,13 +6183,9 @@ def claim_item(item_id):
             }), 403
 
         # Get item
-        if item_id not in inventory_storage:
-            fresh_storage = load_storage('inventory.json')
-            if item_id not in fresh_storage:
-                return jsonify({'success': False, 'error': 'Item not found'}), 404
-            inventory_storage[item_id] = fresh_storage[item_id]
-
-        item = inventory_storage[item_id]
+        item = firestore_get_inventory_item(item_id)
+        if not item:
+            return jsonify({'success': False, 'error': 'Item not found'}), 404
 
         # Initialize claims array if not exists
         if 'claims' not in item:
@@ -6194,11 +6203,11 @@ def claim_item(item_id):
         item['lastModified'] = datetime.now().isoformat()
 
         # Save to storage
-        try:
-            firestore_update_inventory_item(item)
-        except:
-            inventory_storage[item_id] = item
-            save_storage('inventory.json', inventory_storage)
+        if not firestore_update_inventory_item(item):
+            return jsonify({
+                'success': False,
+                'error': 'Failed to claim item'
+            }), 500
 
         # Log activity
         log_activity(
@@ -6244,13 +6253,9 @@ def unclaim_item(item_id):
             }), 403
 
         # Get item
-        if item_id not in inventory_storage:
-            fresh_storage = load_storage('inventory.json')
-            if item_id not in fresh_storage:
-                return jsonify({'success': False, 'error': 'Item not found'}), 404
-            inventory_storage[item_id] = fresh_storage[item_id]
-
-        item = inventory_storage[item_id]
+        item = firestore_get_inventory_item(item_id)
+        if not item:
+            return jsonify({'success': False, 'error': 'Item not found'}), 404
 
         # Remove claim
         if 'claims' in item and user_email in item['claims']:
@@ -6258,11 +6263,11 @@ def unclaim_item(item_id):
             item['lastModified'] = datetime.now().isoformat()
 
             # Save to storage
-            try:
-                firestore_update_inventory_item(item)
-            except:
-                inventory_storage[item_id] = item
-                save_storage('inventory.json', inventory_storage)
+            if not firestore_update_inventory_item(item):
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to unclaim item'
+                }), 500
 
             # Log activity
             log_activity(
@@ -7048,7 +7053,10 @@ def apply_inventory_filters(items, filters):
 def get_inventory_statistics(user_id):
     """Get comprehensive inventory statistics for filtering UI"""
     try:
-        user_items = [item for item in inventory_storage.values() if item.get('user_id') == user_id]
+        user_items = storage_service.query_documents(
+            'inventory',
+            filters=[('user_id', '==', user_id)]
+        ) or []
         
         if not user_items:
             return {}
@@ -7118,7 +7126,10 @@ def search_inventory():
         filters = data.get('filters', {})
         
         # Get user inventory
-        user_items = [item for item in inventory_storage.values() if item.get('user_id') == user_id]
+        user_items = storage_service.query_documents(
+            'inventory',
+            filters=[('user_id', '==', user_id)]
+        ) or []
         
         # Apply filters
         filtered_items = apply_inventory_filters(user_items, filters)
@@ -7174,7 +7185,10 @@ def get_categories():
     """Get all available categories"""
     try:
         user_id = request.args.get('user_id', 'demo-user')
-        user_items = [item for item in inventory_storage.values() if item.get('user_id') == user_id]
+        user_items = storage_service.query_documents(
+            'inventory',
+            filters=[('user_id', '==', user_id)]
+        ) or []
         
         categories = set()
         for item in user_items:
@@ -7207,7 +7221,10 @@ def get_rooms():
     """Get all available rooms"""
     try:
         user_id = request.args.get('user_id', 'demo-user')
-        user_items = [item for item in inventory_storage.values() if item.get('user_id') == user_id]
+        user_items = storage_service.query_documents(
+            'inventory',
+            filters=[('user_id', '==', user_id)]
+        ) or []
         
         rooms = set()
         for item in user_items:
@@ -7305,8 +7322,8 @@ def detect_item_conflicts(item_id):
     try:
         conflicts = []
 
-        estates = family_storage.get('estates', {})
-        for estate_id, estate_data in estates.items():
+        for estate_data in (storage_service.list_documents('family_data') or []):
+            estate_id = estate_data.get('estate_id') or estate_data.get('id')
             interested_members = []
             members = estate_data.get('members', {})
 
@@ -7450,7 +7467,7 @@ def calculate_fairness_metrics(estate_id: str):
 
                 # Get item value
                 item_id = conflict.get('item_id')
-                item = inventory_storage.get(item_id, {})
+                item = firestore_get_inventory_item(item_id) or {}
                 if item.get('estate_id') != estate_id:
                     continue
                 value = float(item.get('estimated_value', item.get('estimatedValue', 0)))
@@ -7520,7 +7537,10 @@ def detect_conflicts():
             all_conflicts.extend(conflicts)
         else:
             # Check all items for this estate
-            estate_items = [item for item in inventory_storage.values() if item.get('estate_id') == estate_id]
+            estate_items = storage_service.query_documents(
+                'inventory',
+                filters=[('estate_id', '==', estate_id)]
+            ) or []
             for item in estate_items:
                 conflicts = [conflict for conflict in detect_item_conflicts(item['id']) if conflict.get('estate_id') == estate_id]
                 all_conflicts.extend(conflicts)
@@ -7558,7 +7578,7 @@ def list_conflicts():
 
             # Add item details
             item_id = conflict.get('item_id')
-            item = inventory_storage.get(item_id, {})
+            item = firestore_get_inventory_item(item_id) or {}
 
             conflict_with_item = conflict.copy()
             conflict_with_item['item_details'] = {
@@ -7640,7 +7660,7 @@ def resolve_conflict():
         }
         
         # Send notifications to all interested parties
-        item = inventory_storage.get(conflict['item_id'], {})
+        item = firestore_get_inventory_item(conflict['item_id']) or {}
         item_name = item.get('name', 'Unknown Item')
         
         for member in conflict['interested_members']:
@@ -8073,8 +8093,8 @@ def get_desire_analysis(share_id):
         # Get item details and sort by total desire
         analysis_items = []
         for item_id, desire_data in item_desires.items():
-            if item_id in inventory_storage:
-                item = inventory_storage[item_id]
+            item = firestore_get_inventory_item(item_id)
+            if item:
                 analysis_items.append({
                     'item': item,
                     'desire_analysis': desire_data,
@@ -8131,21 +8151,20 @@ def assign_item(share_id):
             }), 400
         
         # Update item assignment
-        item = inventory_storage.get(item_id)
+        item = firestore_get_inventory_item(item_id)
         if item and item.get('estate_id') == estate_id:
             item['assignedTo'] = assigned_to
             item['assignment_reason'] = decision_reason
             item['assigned_at'] = datetime.now().isoformat()
             item['lastModified'] = datetime.now().isoformat()
             item['status'] = 'assigned'  # Track item status
-            
-            # Try to save to Firestore
-            try:
-                firestore_update_inventory_item(item)
-            except:
-                # Fall back to JSON storage
-                save_storage('inventory.json', inventory_storage)
-            
+
+            if not firestore_update_inventory_item(item):
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to assign item'
+                }), 500
+
             # Log the assignment decision
             estate_data.setdefault('assignment_decisions', []).append({
                 'item_id': item_id,
