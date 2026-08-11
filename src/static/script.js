@@ -3503,6 +3503,8 @@ class MyEstateAllyApp {
                 this.updateAuthUI(true);
                 this.closeModal('auth-modal');
                 this.showMessage('Account created successfully!', 'success');
+                // Load app state after signup (estates, show welcome modal, etc.)
+                await this.checkAuthStatus();
                 return true;
             } else {
                 throw new Error(data.error || 'Signup failed');
@@ -4430,6 +4432,8 @@ async function handleSignup(event) {
             app.updateAuthUI(true);
             closeModal('auth-modal');
             app.showMessage('Account created successfully!', 'success');
+            // Load app state after signup (estates, show welcome modal, etc.)
+            app.checkAuthStatus();
         } else {
             app.showMessage(data.error || 'Signup failed', 'error');
         }
