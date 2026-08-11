@@ -3,11 +3,14 @@
  * Provides offline functionality and background sync
  */
 
-const CACHE_NAME = 'myestateally-v1.2.1';
-const STATIC_CACHE = 'myestateally-static-v1.2.1';
-const DYNAMIC_CACHE = 'myestateally-dynamic-v1.2.1';
+const CACHE_NAME = 'myestateally-v1.2.2';
+const STATIC_CACHE = 'myestateally-static-v1.2.2';
+const DYNAMIC_CACHE = 'myestateally-dynamic-v1.2.2';
 
-// Files to cache for offline functionality
+// Files to cache for offline functionality.
+// Same-origin only: an external CDN entry that fails to fetch makes
+// cache.addAll() reject, which fails the ENTIRE service worker install
+// and leaves users stuck on the previous cache version.
 const STATIC_FILES = [
     '/',
     '/static/styles.css',
@@ -15,8 +18,8 @@ const STATIC_FILES = [
     '/static/family-view.js',
     '/static/manifest.json',
     '/static/offline.html',
-    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css',
-    'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap'
+    '/static/fontawesome/css/all.min.css',
+    '/static/fontawesome/webfonts/fa-solid-900.woff2'
 ];
 
 // Install event - cache static files

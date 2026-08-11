@@ -23,6 +23,7 @@ nul
 *.bat
 check_all_items.py
 check_user.py
+delete_user*.py
 tests/
 requirements-test.txt
 .claude/

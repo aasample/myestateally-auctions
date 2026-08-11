@@ -109,7 +109,7 @@ const CACHE_NAME = 'myestateally-v1.0.8';        // ← increment
 const STATIC_CACHE = 'myestateally-static-v1.0.8';
 const DYNAMIC_CACHE = 'myestateally-dynamic-v1.0.8';
 ```
-Current version: **v1.2.1**
+Current version: **v1.2.2**
 The SW calls `skipWaiting()` on install so the new version activates immediately.
 
 ---
@@ -332,6 +332,7 @@ Replaces navy (#0a1628) + gold (#c9a84c). Updated CSS variables in both `src/tem
 - **Fix**: appended a "PHASE 14 — DASHBOARD CLEAN-UP" section at the very bottom of `styles.css` (after END GLAMOUR THEME) overriding: header (solid bark, no light-end gradient), nav (light linen bar, dark text, sage active), `.btn.primary` + `.btn.ai-lookup-btn` (solid sage, was blue→purple gradient), welcome card (linen bg, bark text, pattern overlay removed), all four stat icons (uniform sage-light circle + forest icon, was 4 different colors), next-step-card (white bg, cream rows, dark text — was near-black), shortcut icons (sage-light circles)
 - **Key insight**: overrides go at the FILE BOTTOM — equal-specificity rules are resolved by source order, so appending wins without `!important`
 - SW bumped to **v1.2.1**
+- **Font Awesome self-hosted** (v1.2.2): icons rendered as empty circles on machines where the cdnjs CDN is blocked/unreachable. Downloaded FA 6.4.0 into `src/static/fontawesome/` (css/all.min.css + webfonts/) and pointed ALL six templates (index, landing, family-view, terms, privacy, mobile-upload) at the local copy. Also removed external CDN URLs from `sw.js` STATIC_FILES — `cache.addAll()` rejects if ANY entry fails, which fails the whole SW install and strands users on the old cache version. Keep STATIC_FILES same-origin only.
 
 ---
 
