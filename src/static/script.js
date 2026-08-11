@@ -4431,8 +4431,12 @@ async function handleSignup(event) {
             app.currentUser = data.user;
             app.updateAuthUI(true);
             closeModal('auth-modal');
-            app.showMessage('Account created successfully!', 'success');
-            // Load app state after signup (estates, show welcome modal, etc.)
+            // Immediately show welcome modal for new user to create their first estate
+            setTimeout(() => {
+                app.showWelcomeModal();
+            }, 500);
+            app.showMessage('Account created successfully! Let\'s create your first estate.', 'success');
+            // Load app state (will load estates in background)
             app.checkAuthStatus();
         } else {
             app.showMessage(data.error || 'Signup failed', 'error');
